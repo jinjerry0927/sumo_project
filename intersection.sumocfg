@@ -17,4 +17,8 @@
         <no-step-log value="true"/>
     </report>
 
+    <gui_only>
+        <delay value="100"/>
+    </gui_only>
+
 </configuration>
