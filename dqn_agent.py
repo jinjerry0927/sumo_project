@@ -31,8 +31,8 @@ def set_sumo_home(path=None):
 # ── CLI 인자 파싱 ─────────────────────────────────────────────
 parser = argparse.ArgumentParser()
 parser.add_argument("--sumo_home",  default=None,          help="SUMO 설치 경로")
-parser.add_argument("--net",        default="intersection.net.xml")
-parser.add_argument("--route",      default="intersection.rou.xml")
+parser.add_argument("--net",        default="network_v1/intersection.net.xml")
+parser.add_argument("--route",      default="network_v1/intersection.rou.xml")
 parser.add_argument("--episodes",   type=int, default=1000)
 parser.add_argument("--resume",     default=None,          help="재개할 체크포인트 .pth 경로")
 parser.add_argument("--out_dir",    default="results",     help="결과 저장 폴더")

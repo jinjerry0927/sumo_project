@@ -4,8 +4,8 @@ os.environ['SUMO_HOME'] = 'C:/Program Files (x86)/Eclipse/Sumo'
 import sumo_rl
 
 env = sumo_rl.SumoEnvironment(
-    net_file='intersection.net.xml',
-    route_file='intersection.rou.xml',
+    net_file='network_v1/intersection.net.xml',
+    route_file='network_v1/intersection.rou.xml',
     use_gui=True,
     num_seconds=3600,
     min_green=5,

@@ -29,9 +29,9 @@ set_sumo_home()
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode",       choices=["fixed", "rl"], default="rl",
                     help="fixed: 고정신호 시연 / rl: 학습된 모델 시연")
-parser.add_argument("--model",      default="results/checkpoint_ep400.pth")
-parser.add_argument("--net",        default="intersection.net.xml")
-parser.add_argument("--route",      default="intersection.rou.xml")
+parser.add_argument("--model",      default="results/dqn_final.pth")
+parser.add_argument("--net",        default="network_v1/intersection.net.xml")
+parser.add_argument("--route",      default="network_v1/intersection.rou.xml")
 parser.add_argument("--duration",   type=int, default=6000,
                     help="시뮬레이션 시간(초) - 기본 1800초(30분)")
 parser.add_argument("--delay",      type=float, default=0.5,

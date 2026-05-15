@@ -1,0 +1,16 @@
+# Smart Intersection Signal Control — 의존성
+# Python 3.10+ 권장
+# SUMO 1.20+ 별도 설치 필요 (https://eclipse.dev/sumo/)
+
+# ── 강화학습 + SUMO ──
+torch>=2.0
+sumo-rl>=1.4.5
+gymnasium>=0.29
+
+# ── 시각화 / 데이터 ──
+numpy>=1.24
+matplotlib>=3.7
+
+# ── YOLO 차량 탐지 ──
+ultralytics>=8.0
+opencv-python>=4.8

@@ -1,0 +1,77 @@
+# =====================================================
+# Python
+# =====================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 가상환경
+venv/
+env/
+.venv/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# =====================================================
+# 큰 모델/영상 파일 (재생성 가능)
+# =====================================================
+# YOLO 사전학습 가중치 (ultralytics가 자동 다운로드함)
+yolov8n.pt
+yolov8s.pt
+yolov8m.pt
+yolov10n.pt
+yolov10s.pt
+yolov10m.pt
+
+# 영상 파일 (학습/데모용)
+*.mp4
+*.avi
+*.mov
+
+# =====================================================
+# SUMO 임시 파일
+# =====================================================
+*.sumo-tmp
+sumo.log
+sumo-output*.xml
+tripinfo.xml
+fcd-output.xml
+
+# =====================================================
+# 학습 결과 — 중간 체크포인트는 추적 안 함
+# (results/dqn_final.pth 와 checkpoint_ep1000.pth 는 강제 추적)
+# =====================================================
+results/checkpoint_ep[1-9][0-9].pth
+results/checkpoint_ep[1-9][0-9][0-9].pth
+results/checkpoint_ep[1-9][0-9][0-9][0-9].pth.bak
+
+# 학습 중 임시 로그
+*.tmp.log
+
+# 결과 백업
+results_*.bak/
+results.bak/
+
+# =====================================================
+# IDE / OS
+# =====================================================
+# VSCode 개인 설정 (공유 설정은 .vscode/ 안에 살림)
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =====================================================
+# v2 학습 결과 (대용량, 학습 후 추가될 것)
+# =====================================================
+results_v2/checkpoint_ep[1-9][0-9].pth
+results_v2/checkpoint_ep[1-9][0-9][0-9].pth
