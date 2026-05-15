@@ -1,7 +1,6 @@
 # 강화학습 기반 스마트 교차로 신호 제어 시스템
 
 > **RL-based Adaptive Traffic Signal Control System**
-> 경주대학교 ICT 종합설계 — 전형주, 이진욱
 
 ## 📌 프로젝트 개요
 
