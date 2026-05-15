@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+    <!-- 차량 타입 (departLane="best": 회전 방향에 맞는 차로로 자동 배정) -->
+    <vType id="car" accel="2.6" decel="4.5" sigma="0.5" length="5"
+           maxSpeed="13.89" departLane="best"/>
+
+    <!-- 12개 회전 방향 정의 -->
+    <route id="N_S" edges="N2C C2S"/>  <!-- 직진 -->
+    <route id="N_E" edges="N2C C2E"/>  <!-- 좌회전 -->
+    <route id="N_W" edges="N2C C2W"/>  <!-- 우회전 -->
+
+    <route id="S_N" edges="S2C C2N"/>  <!-- 직진 -->
+    <route id="S_W" edges="S2C C2W"/>  <!-- 좌회전 -->
+    <route id="S_E" edges="S2C C2E"/>  <!-- 우회전 -->
+
+    <route id="E_W" edges="E2C C2W"/>  <!-- 직진 -->
+    <route id="E_S" edges="E2C C2S"/>  <!-- 좌회전 -->
+    <route id="E_N" edges="E2C C2N"/>  <!-- 우회전 -->
+
+    <route id="W_E" edges="W2C C2E"/>  <!-- 직진 -->
+    <route id="W_N" edges="W2C C2N"/>  <!-- 좌회전 -->
+    <route id="W_S" edges="W2C C2S"/>  <!-- 우회전 -->
+
+    <!--
+        교통 흐름 비율: 직진 60%, 우회전 25%, 좌회전 15%
+        각 진입로 총 800 veh/h × 4 = 3200 veh/h
+    -->
+
+    <!-- 북쪽에서 진입 (총 800/h) -->
+    <flow id="f_NS" type="car" route="N_S" begin="0" end="3600" vehsPerHour="480"/>
+    <flow id="f_NW" type="car" route="N_W" begin="0" end="3600" vehsPerHour="200"/>
+    <flow id="f_NE" type="car" route="N_E" begin="0" end="3600" vehsPerHour="120"/>
+
+    <!-- 남쪽에서 진입 (총 800/h) -->
+    <flow id="f_SN" type="car" route="S_N" begin="0" end="3600" vehsPerHour="480"/>
+    <flow id="f_SE" type="car" route="S_E" begin="0" end="3600" vehsPerHour="200"/>
+    <flow id="f_SW" type="car" route="S_W" begin="0" end="3600" vehsPerHour="120"/>
+
+    <!-- 동쪽에서 진입 (총 800/h) -->
+    <flow id="f_EW" type="car" route="E_W" begin="0" end="3600" vehsPerHour="480"/>
+    <flow id="f_EN" type="car" route="E_N" begin="0" end="3600" vehsPerHour="200"/>
+    <flow id="f_ES" type="car" route="E_S" begin="0" end="3600" vehsPerHour="120"/>
+
+    <!-- 서쪽에서 진입 (총 800/h) -->
+    <flow id="f_WE" type="car" route="W_E" begin="0" end="3600" vehsPerHour="480"/>
+    <flow id="f_WS" type="car" route="W_S" begin="0" end="3600" vehsPerHour="200"/>
+    <flow id="f_WN" type="car" route="W_N" begin="0" end="3600" vehsPerHour="120"/>
+
+</routes>

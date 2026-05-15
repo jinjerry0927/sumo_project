@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<connections>
+    <!--
+        한국 우측통행 기준
+        lane 0 (가장 우측) = 우회전 only
+        lane 1 (중앙)      = 직진 only
+        lane 2 (가장 좌측) = 좌회전 only
+    -->
+
+    <!-- 북쪽에서 진입 (남쪽으로 진행) -->
+    <connection from="N2C" to="C2W" fromLane="0" toLane="0"/>  <!-- 우회전 → 서쪽 -->
+    <connection from="N2C" to="C2S" fromLane="1" toLane="1"/>  <!-- 직진 → 남쪽 -->
+    <connection from="N2C" to="C2E" fromLane="2" toLane="2"/>  <!-- 좌회전 → 동쪽 -->
+
+    <!-- 남쪽에서 진입 (북쪽으로 진행) -->
+    <connection from="S2C" to="C2E" fromLane="0" toLane="0"/>  <!-- 우회전 → 동쪽 -->
+    <connection from="S2C" to="C2N" fromLane="1" toLane="1"/>  <!-- 직진 → 북쪽 -->
+    <connection from="S2C" to="C2W" fromLane="2" toLane="2"/>  <!-- 좌회전 → 서쪽 -->
+
+    <!-- 동쪽에서 진입 (서쪽으로 진행) -->
+    <connection from="E2C" to="C2N" fromLane="0" toLane="0"/>  <!-- 우회전 → 북쪽 -->
+    <connection from="E2C" to="C2W" fromLane="1" toLane="1"/>  <!-- 직진 → 서쪽 -->
+    <connection from="E2C" to="C2S" fromLane="2" toLane="2"/>  <!-- 좌회전 → 남쪽 -->
+
+    <!-- 서쪽에서 진입 (동쪽으로 진행) -->
+    <connection from="W2C" to="C2S" fromLane="0" toLane="0"/>  <!-- 우회전 → 남쪽 -->
+    <connection from="W2C" to="C2E" fromLane="1" toLane="1"/>  <!-- 직진 → 동쪽 -->
+    <connection from="W2C" to="C2N" fromLane="2" toLane="2"/>  <!-- 좌회전 → 북쪽 -->
+</connections>

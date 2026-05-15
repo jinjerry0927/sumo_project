@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2026-05-15T09:11:43.865326+09:00 by Eclipse SUMO netconvert 1.26.0
+<netconvertConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+    <input>
+        <sumo-net-file value="geumjanggyo_clean.net.xml"/>
+    </input>
+
+    <output>
+        <plain-output-prefix value="plain/g"/>
+    </output>
+
+    <processing>
+        <geometry.min-radius.fix.railways value="false"/>
+        <geometry.avoid-overlap value="false"/>
+        <geometry.max-grade.fix value="false"/>
+        <offset.disable-normalization value="true"/>
+        <lefthand value="0"/>
+    </processing>
+
+    <junctions>
+        <no-turnarounds value="true"/>
+        <junctions.corner-detail value="5"/>
+        <junctions.limit-turn-speed value="5.50"/>
+        <rectangular-lane-cut value="0"/>
+    </junctions>
+
+    <pedestrian>
+        <walkingareas value="0"/>
+    </pedestrian>
+
+</netconvertConfiguration>
+-->
+
+<connections version="1.20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/connections_file.xsd">
+    <connection from="-1352322521" to="-1452612551#1" fromLane="0" toLane="0"/>
+    <connection from="-1352322521" to="1352322529" fromLane="0" toLane="0"/>
+
+    <connection from="-1452612551#1"/>
+
+    <connection from="-177788562#1" to="-67147285" fromLane="0" toLane="0"/>
+    <connection from="-177788562#1" to="-67147285" fromLane="0" toLane="1"/>
+    <connection from="-177788562#1" to="-67147285" fromLane="0" toLane="2"/>
+    <connection from="-177788562#1" to="-67147285" fromLane="0" toLane="3"/>
+
+    <connection from="-67147285" to="1352322526" fromLane="0" toLane="0"/>
+    <connection from="-67147285" to="-1352322521" fromLane="1" toLane="0"/>
+
+    <connection from="1352322521" to="67147285" fromLane="0" toLane="1"/>
+    <connection from="1352322521" to="67147285" fromLane="0" toLane="2"/>
+
+    <connection from="1352322528" to="-1452612551#1" fromLane="0" toLane="0"/>
+    <connection from="1352322528" to="1352322529" fromLane="0" toLane="0"/>
+    <connection from="1352322528" to="1352322521" fromLane="0" toLane="0"/>
+
+    <connection from="1352322529" to="67147285" fromLane="0" toLane="0"/>
+
+    <connection from="177788562#0"/>
+
+    <connection from="37408970#0" to="1352322529" fromLane="0" toLane="0"/>
+    <connection from="37408970#0" to="1352322521" fromLane="0" toLane="0"/>
+
+    <connection from="67147285" to="177788562#0" fromLane="0" toLane="0"/>
+
+</connections>

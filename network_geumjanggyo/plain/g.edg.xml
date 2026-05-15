@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2026-05-15T09:11:43.864668+09:00 by Eclipse SUMO netconvert 1.26.0
+<netconvertConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+    <input>
+        <sumo-net-file value="geumjanggyo_clean.net.xml"/>
+    </input>
+
+    <output>
+        <plain-output-prefix value="plain/g"/>
+    </output>
+
+    <processing>
+        <geometry.min-radius.fix.railways value="false"/>
+        <geometry.avoid-overlap value="false"/>
+        <geometry.max-grade.fix value="false"/>
+        <offset.disable-normalization value="true"/>
+        <lefthand value="0"/>
+    </processing>
+
+    <junctions>
+        <no-turnarounds value="true"/>
+        <junctions.corner-detail value="5"/>
+        <junctions.limit-turn-speed value="5.50"/>
+        <rectangular-lane-cut value="0"/>
+    </junctions>
+
+    <pedestrian>
+        <walkingareas value="0"/>
+    </pedestrian>
+
+</netconvertConfiguration>
+-->
+
+<edges version="1.20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/edges_file.xsd">
+    <location netOffset="-518253.32,-3968826.37" convBoundary="0.00,0.00,967.89,453.08" origBoundary="129.200282,35.860507,129.383915,36.029435" projParameter="+proj=utm +zone=52 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"/>
+
+    <edge id="-1352322521" from="811058967" to="cluster_12512219230_12512219247_5391243054" priority="11" type="highway.secondary" numLanes="3" speed="27.78" shape="405.37,263.20 434.48,246.89" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone">
+        <param key="ref" value="904"/>
+    </edge>
+    <edge id="-1452612551#1" from="cluster_12512219230_12512219247_5391243054" to="437088176" priority="11" type="highway.secondary" numLanes="3" speed="27.78" shape="484.56,223.87 615.42,163.73 623.87,160.21 728.28,114.14 742.99,107.03 852.93,53.60 967.89,0.00" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone">
+        <param key="ref" value="904"/>
+    </edge>
+    <edge id="-177788562#1" from="437088179" to="437088178" priority="11" type="highway.secondary" numLanes="3" speed="27.78" shape="0.00,453.08 60.41,426.52 115.19,402.42 155.13,384.85 161.25,382.06" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone">
+        <param key="ref" value="904"/>
+    </edge>
+    <edge id="-67147285" from="437088178" to="811058967" priority="11" type="highway.secondary" numLanes="3" speed="27.78" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone">
+        <param key="ref" value="904"/>
+    </edge>
+    <edge id="1352322521" from="cluster_12512219230_12512219247_5391243054" to="811058967" priority="11" type="highway.secondary" numLanes="3" speed="27.78" shape="434.48,246.89 405.37,263.20" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone">
+        <param key="ref" value="904"/>
+    </edge>
+    <edge id="1352322526" from="811058967" to="12512219236" priority="6" type="highway.secondary_link" numLanes="3" speed="22.22" shape="405.37,263.20 408.89,249.99 411.82,235.16 412.94,222.27 411.40,204.51" spreadType="center" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone"/>
+    <edge id="1352322528" from="12512219235" to="cluster_12512219230_12512219247_5391243054" priority="6" type="highway.secondary_link" numLanes="3" speed="22.22" shape="402.16,187.52 420.59,208.78 437.52,223.88 450.11,224.99 468.02,222.87 484.56,223.87" spreadType="center" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone"/>
+    <edge id="1352322529" from="cluster_12512219230_12512219247_5391243054" to="811058967" priority="6" type="highway.secondary_link" numLanes="3" speed="22.22" shape="462.97,233.80 457.67,251.41 455.72,260.45 457.01,276.36 459.05,292.39 440.78,281.40 429.67,270.40 415.03,266.76 405.37,263.20" spreadType="center" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone"/>
+    <edge id="177788562#0" from="437088178" to="437088179" priority="11" type="highway.secondary" numLanes="3" speed="27.78" shape="161.25,382.06 155.13,384.85 115.19,402.42 60.41,426.52 0.00,453.08" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone">
+        <param key="ref" value="904"/>
+    </edge>
+    <edge id="37408970#0" from="437088176" to="cluster_12512219230_12512219247_5391243054" priority="11" type="highway.secondary" numLanes="3" speed="27.78" shape="967.89,0.00 852.93,53.60 742.99,107.03 728.28,114.14 623.87,160.21 615.42,163.73 484.56,223.87" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone">
+        <param key="ref" value="904"/>
+    </edge>
+    <edge id="67147285" from="811058967" to="437088178" priority="11" type="highway.secondary" numLanes="3" speed="27.78" disallow="tram rail_urban rail rail_electric rail_fast ship container cable_car subway aircraft wheelchair scooter drone">
+        <param key="ref" value="904"/>
+    </edge>
+</edges>

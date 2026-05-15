@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2026-05-15T09:11:43.862706+09:00 by Eclipse SUMO netconvert 1.26.0
+<netconvertConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+    <input>
+        <sumo-net-file value="geumjanggyo_clean.net.xml"/>
+    </input>
+
+    <output>
+        <plain-output-prefix value="plain/g"/>
+    </output>
+
+    <processing>
+        <geometry.min-radius.fix.railways value="false"/>
+        <geometry.avoid-overlap value="false"/>
+        <geometry.max-grade.fix value="false"/>
+        <offset.disable-normalization value="true"/>
+        <lefthand value="0"/>
+    </processing>
+
+    <junctions>
+        <no-turnarounds value="true"/>
+        <junctions.corner-detail value="5"/>
+        <junctions.limit-turn-speed value="5.50"/>
+        <rectangular-lane-cut value="0"/>
+    </junctions>
+
+    <pedestrian>
+        <walkingareas value="0"/>
+    </pedestrian>
+
+</netconvertConfiguration>
+-->
+
+<nodes version="1.20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/nodes_file.xsd">
+    <location netOffset="-518253.32,-3968826.37" convBoundary="0.00,0.00,967.89,453.08" origBoundary="129.200282,35.860507,129.383915,36.029435" projParameter="+proj=utm +zone=52 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"/>
+
+    <node id="12512219235" x="402.16" y="187.52" type="dead_end"/>
+    <node id="12512219236" x="411.40" y="204.51" type="dead_end"/>
+    <node id="437088176" x="967.89" y="0.00" type="dead_end"/>
+    <node id="437088178" x="161.25" y="382.06" type="priority"/>
+    <node id="437088179" x="0.00" y="453.08" type="dead_end"/>
+    <node id="811058967" x="405.37" y="263.20" type="priority"/>
+    <node id="cluster_12512219230_12512219247_5391243054" x="460.67" y="234.85" type="traffic_light" tl="cluster_12512219230_12512219247_5391243054" tlType="actuated"/>
+</nodes>

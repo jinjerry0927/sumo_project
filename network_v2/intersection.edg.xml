@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<edges>
+    <!-- 진입 (각 진입로 3차선: lane 0=우회전, lane 1=직진, lane 2=좌회전) -->
+    <edge id="N2C" from="N" to="center" numLanes="3" speed="13.89" priority="2"/>
+    <edge id="S2C" from="S" to="center" numLanes="3" speed="13.89" priority="2"/>
+    <edge id="E2C" from="E" to="center" numLanes="3" speed="13.89" priority="2"/>
+    <edge id="W2C" from="W" to="center" numLanes="3" speed="13.89" priority="2"/>
+
+    <!-- 진출 (각 진출로 3차선) -->
+    <edge id="C2N" from="center" to="N" numLanes="3" speed="13.89" priority="2"/>
+    <edge id="C2S" from="center" to="S" numLanes="3" speed="13.89" priority="2"/>
+    <edge id="C2E" from="center" to="E" numLanes="3" speed="13.89" priority="2"/>
+    <edge id="C2W" from="center" to="W" numLanes="3" speed="13.89" priority="2"/>
+</edges>
