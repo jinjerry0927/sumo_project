@@ -1,3 +1,7 @@
+"""[v1 — mp4 데모용]
+실시간 스트림/ROI/4방향 카운트가 필요하면 `perception/run_realtime.py` 사용.
+이 파일은 단일 mp4 파일에서 단순 총 카운트만 띄우는 초기 데모 그대로 유지.
+"""
 import cv2
 from ultralytics import YOLO
 

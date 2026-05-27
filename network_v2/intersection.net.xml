@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on 2026-05-15T09:22:13.357683+09:00 by Eclipse SUMO netconvert 1.26.0
+<!-- generated on 2026-05-24T11:01:45.154399+09:00 by Eclipse SUMO netconvert 1.26.0
 <netconvertConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
 
     <input>
@@ -14,6 +14,10 @@
     </output>
 
     <tls_building>
+        <tls.green.time value="30"/>
+        <tls.yellow.time value="4"/>
+        <tls.allred.time value="2"/>
+        <tls.left-green.time value="18"/>
         <tls.default-type value="static"/>
     </tls_building>
 
@@ -119,14 +123,16 @@
     </edge>
 
     <tlLogic id="center" type="static" programID="0" offset="0">
-        <phase duration="33" state="GGgGrrGGgGrr"/>
-        <phase duration="3"  state="yygyrryygyrr"/>
-        <phase duration="6"  state="rrGrrrrrGrrr"/>
-        <phase duration="3"  state="rryrrrrryrrr"/>
-        <phase duration="33" state="GrrGGgGrrGGg"/>
-        <phase duration="3"  state="yrryygyrryyg"/>
-        <phase duration="6"  state="rrrrrGrrrrrG"/>
-        <phase duration="3"  state="rrrrryrrrrry"/>
+        <phase duration="30" state="GGgGrrGGgGrr"/>
+        <phase duration="4"  state="yygyrryygyrr"/>
+        <phase duration="18" state="rrGrrrrrGrrr"/>
+        <phase duration="4"  state="rryrrrrryrrr"/>
+        <phase duration="2"  state="rrrrrrrrrrrr"/>
+        <phase duration="30" state="GrrGGgGrrGGg"/>
+        <phase duration="4"  state="yrryygyrryyg"/>
+        <phase duration="18" state="rrrrrGrrrrrG"/>
+        <phase duration="4"  state="rrrrryrrrrry"/>
+        <phase duration="2"  state="rrrrrrrrrrrr"/>
     </tlLogic>
 
     <junction id="E" type="dead_end" x="400.00" y="200.00" incLanes="C2E_0 C2E_1 C2E_2" intLanes="" shape="400.00,200.00 400.00,190.40 400.00,200.00"/>

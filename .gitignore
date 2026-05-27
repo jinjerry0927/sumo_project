@@ -24,9 +24,17 @@ ENV/
 yolov8n.pt
 yolov8s.pt
 yolov8m.pt
+yolov8l.pt
+yolov8x.pt
 yolov10n.pt
 yolov10s.pt
 yolov10m.pt
+rtdetr-l.pt
+rtdetr-x.pt
+
+# perception 데모 출력물 (재생성 가능)
+captures/
+logs/
 
 # 영상 파일 (학습/데모용)
 *.mp4
@@ -75,3 +83,5 @@ desktop.ini
 # =====================================================
 results_v2/checkpoint_ep[1-9][0-9].pth
 results_v2/checkpoint_ep[1-9][0-9][0-9].pth
+results_v2_failed_800veh/checkpoint_ep[1-9][0-9].pth
+results_v2_failed_800veh/checkpoint_ep[1-9][0-9][0-9].pth

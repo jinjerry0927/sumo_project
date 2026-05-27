@@ -14,3 +14,9 @@ matplotlib>=3.7
 # ── YOLO 차량 탐지 ──
 ultralytics>=8.0
 opencv-python>=4.8
+
+# ── perception 모듈 (ITS OpenAPI 호출) ──
+requests>=2.31
+
+# ── 선택: YouTube 라이브 fallback (perception/run_realtime.py --source youtube) ──
+# pip install yt-dlp   # 필요할 때만 설치
