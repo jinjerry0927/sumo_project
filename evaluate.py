@@ -1,52 +1,56 @@
 """
-1000ep 학습된 DQN vs Fixed Signal 평가.
+SmartSignal(DQN) vs 고정신호 — 시나리오별 평가 (M1).
 
-기존 compare.py 대비 개선점:
-- 30 episode로 통계 유의성 확보 (평균 ± 표준편차)
-- 표준 교통 메트릭 수집: waiting time, queue length, throughput
-- 결과를 results/evaluation_*.csv 로 저장
-- 발표용 깔끔한 비교 그래프 생성
+핵심: 평가용 동결 시나리오 5종(scenarios/eval/*.rou.xml)을 순회하며,
+시나리오마다 Fixed 와 SmartSignal 을 **동일 seed(동일 트래픽)** 로 비교 → 차이는 신호 전략 때문만.
+
+제어 규약은 smart_signal.py 와 동일:
+- state 29차원 (앞 num_green_phases = phase one-hot)
+- DQN 출력 0=Keep / 1=Next → green phase 사이클 전환
+- 고정신호 baseline: green phase를 일정 간격으로 순환
+
+⚠️ TODO (차터 M2): Webster 최적 고정주기 baseline 추가, throughput(도착차량) 메트릭.
+실행:
+    python evaluate.py                 # 기본: 시나리오당 10ep
+    python evaluate.py --episodes 30   # 통계 강화
 """
 import os
 import sys
 import csv
+import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-import sumo_rl
 import matplotlib.pyplot as plt
+
+from scenarios import EVAL_SCENARIOS, freeze_eval_scenarios
 
 
 def set_sumo_home():
     if "SUMO_HOME" in os.environ:
         return
-    candidates = [
-        "C:/Program Files (x86)/Eclipse/Sumo",
-        "/usr/share/sumo",
-        "/opt/homebrew/share/sumo",
-    ]
-    for c in candidates:
+    for c in ["C:/Program Files (x86)/Eclipse/Sumo", "/usr/share/sumo", "/opt/homebrew/share/sumo"]:
         if c and os.path.isdir(c):
             os.environ["SUMO_HOME"] = c
-            print(f"[INFO] SUMO_HOME: {c}")
             return
     print("[ERROR] SUMO_HOME을 찾을 수 없습니다.")
     sys.exit(1)
 
 
 set_sumo_home()
+import sumo_rl
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--model",         default="results/smart_signal.pth")
+parser.add_argument("--net",           default="network/intersection.net.xml")
+parser.add_argument("--scenarios_dir", default="scenarios/eval")
+parser.add_argument("--episodes",      type=int, default=10, help="시나리오당 반복 수")
+parser.add_argument("--seconds",       type=int, default=3600)
+parser.add_argument("--seed_base",     type=int, default=1000)
+parser.add_argument("--fixed_hold",    type=int, default=6, help="고정신호: green phase 유지 결정스텝")
+args = parser.parse_args()
 
-# ── 설정 ──
-STATE_SIZE  = 11
-ACTION_SIZE = 2
-MODEL_PATH  = "results/dqn_final.pth"
-NET_FILE    = "network_v1/intersection.net.xml"
-ROUTE_FILE  = "network_v1/intersection.rou.xml"
-NUM_SECONDS = 3600
-EPISODES    = 30          # 5 → 30 으로 통계 유의성 확보
-FIXED_CYCLE = 30
-
+MIN_GREEN, MAX_GREEN = 15, 60
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -63,174 +67,165 @@ class DQN(nn.Module):
         return self.net(x)
 
 
-# ── 모델 로드 ──
-policy_net = DQN(STATE_SIZE, ACTION_SIZE).to(device)
-policy_net.load_state_dict(torch.load(MODEL_PATH, map_location=device))
-policy_net.eval()
-print(f"[INFO] 모델 로드: {MODEL_PATH}")
+# ── 모델 로드 (없으면 Fixed-only) ──
+policy_net = None
+NUM_GREEN_PHASES = 4
+if os.path.isfile(args.model):
+    ckpt = torch.load(args.model, map_location=device)
+    if isinstance(ckpt, dict) and "policy_net" in ckpt:
+        state_size = ckpt.get("state_size", 29)
+        action_size = ckpt.get("action_size", 2)
+        NUM_GREEN_PHASES = ckpt.get("num_green_phases", 4)
+        weights = ckpt["policy_net"]
+    else:
+        weights = ckpt
+        state_size = weights["net.0.weight"].shape[1]
+        action_size = weights[max(k for k in weights if k.endswith(".weight"))].shape[0]
+    policy_net = DQN(state_size, action_size).to(device)
+    policy_net.load_state_dict(weights)
+    policy_net.eval()
+    MODES = ["fixed", "rl"]
+    print(f"[INFO] 모델 로드: {args.model} "
+          f"(state={state_size}, action={action_size}, green_phases={NUM_GREEN_PHASES})")
+else:
+    MODES = ["fixed"]
+    print(f"[WARN] 모델 없음({args.model}) → Fixed 신호만 평가 (하베스 점검 모드).")
+    print("       SmartSignal 비교는 'python smart_signal.py' 학습 후 다시 실행하세요.")
+
+# ── 시나리오 파일 확보 (없으면 자동 생성) ──
+scenario_paths = {}
+for name in EVAL_SCENARIOS:
+    p = os.path.join(args.scenarios_dir, f"{name}.rou.xml")
+    if not os.path.isfile(p):
+        print("[INFO] 시나리오 파일이 없어 생성합니다...")
+        freeze_eval_scenarios(args.scenarios_dir)
+    scenario_paths[name] = p
 
 
-def make_env():
-    return sumo_rl.SumoEnvironment(
-        net_file=NET_FILE,
-        route_file=ROUTE_FILE,
-        use_gui=False,
-        num_seconds=NUM_SECONDS,
-        min_green=5,
-        max_green=60,
-        single_agent=True,
-        sumo_warnings=False,
+def run_episode(mode, route_file, seed):
+    """한 에피소드 실행 → 메트릭 dict."""
+    env = sumo_rl.SumoEnvironment(
+        net_file=args.net, route_file=route_file, use_gui=False,
+        num_seconds=args.seconds, min_green=MIN_GREEN, max_green=MAX_GREEN,
+        single_agent=True, sumo_warnings=False, sumo_seed=seed,
     )
-
-
-def run_episode(mode, ep):
-    """한 에피소드 실행, 메트릭 dict 반환."""
-    env = make_env()
     obs, _ = env.reset()
-    total_reward = 0.0
-    done = False
-    step = 0
-    waits = []
-    queues = []
-
+    total_reward, done, step = 0.0, False, 0
+    waits, queues = [], []
     while not done:
+        cur_phase = int(np.array(obs[:NUM_GREEN_PHASES]).argmax())
         if mode == "fixed":
-            action = (step // FIXED_CYCLE) % 2
+            action = (step // args.fixed_hold) % NUM_GREEN_PHASES
         else:
             with torch.no_grad():
-                q = policy_net(torch.FloatTensor(obs).to(device))
-                action = q.argmax().item()
-
+                q = policy_net(torch.FloatTensor(np.array(obs, dtype=np.float32)).to(device))
+                dqn_action = int(q.argmax().item())
+            action = cur_phase if dqn_action == 0 else (cur_phase + 1) % NUM_GREEN_PHASES
         obs, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
         total_reward += reward
         step += 1
-
-        # sumo-rl info 에서 메트릭 추출
-        # info: agents_total_stopped, agents_total_accumulated_waiting_time
         if isinstance(info, dict):
-            wait = info.get('system_total_waiting_time', None)
-            stopped = info.get('system_total_stopped', None)
-            if wait is not None:  waits.append(wait)
-            if stopped is not None: queues.append(stopped)
-
-    # 시뮬 종료 시 처리량
-    # SUMO TraCI 통해 arrived 차량 수를 직접 셀 수도 있지만,
-    # 여기는 sumo-rl info 만으로 단순 평균
+            if info.get('system_total_waiting_time') is not None:
+                waits.append(info['system_total_waiting_time'])
+            if info.get('system_total_stopped') is not None:
+                queues.append(info['system_total_stopped'])
     env.close()
-
     return {
-        'episode': ep,
-        'mode': mode,
         'total_reward': total_reward,
-        'avg_waiting_time': np.mean(waits) if waits else 0.0,
-        'max_waiting_time': max(waits) if waits else 0.0,
-        'avg_queue':       np.mean(queues) if queues else 0.0,
-        'max_queue':       max(queues) if queues else 0.0,
-        'steps': step,
+        'avg_waiting_time': float(np.mean(waits)) if waits else 0.0,
+        'avg_queue': float(np.mean(queues)) if queues else 0.0,
+        'max_queue': float(max(queues)) if queues else 0.0,
     }
 
 
-# ── 메인 ──
-print(f"\n[FIXED] {EPISODES} 에피소드 실행...")
-fixed_results = [run_episode("fixed", i+1) for i in range(EPISODES)]
-for r in fixed_results:
-    print(f"  ep {r['episode']:2d} | reward={r['total_reward']:8.2f} | "
-          f"avg_wait={r['avg_waiting_time']:7.1f} | avg_queue={r['avg_queue']:5.1f}")
+# ── 평가 루프 (시나리오 × 모드 × 에피소드, 페어드 seed) ──
+records = []   # 개별 에피소드 결과
+print(f"\n평가 시작: {len(EVAL_SCENARIOS)} 시나리오 × {args.episodes}ep × {MODES}\n")
+for name in EVAL_SCENARIOS:
+    route = scenario_paths[name]
+    for ep in range(args.episodes):
+        seed = args.seed_base + ep   # Fixed/RL 동일 seed → 동일 트래픽
+        for mode in MODES:
+            m = run_episode(mode, route, seed)
+            records.append({'scenario': name, 'mode': mode, 'episode': ep, 'seed': seed, **m})
+    # 시나리오 요약 출력
+    line = f"[{name:11s}]"
+    for mode in MODES:
+        w = [r['avg_waiting_time'] for r in records if r['scenario'] == name and r['mode'] == mode]
+        q = [r['avg_queue'] for r in records if r['scenario'] == name and r['mode'] == mode]
+        label = 'Fixed' if mode == 'fixed' else 'Smart'
+        line += f"  {label}: wait={np.mean(w):7.1f} queue={np.mean(q):5.1f}"
+    print(line)
 
-print(f"\n[RL] {EPISODES} 에피소드 실행...")
-rl_results = [run_episode("rl", i+1) for i in range(EPISODES)]
-for r in rl_results:
-    print(f"  ep {r['episode']:2d} | reward={r['total_reward']:8.2f} | "
-          f"avg_wait={r['avg_waiting_time']:7.1f} | avg_queue={r['avg_queue']:5.1f}")
+
+# ── 종합 표 ──
+def agg(scenario, mode, key):
+    vals = [r[key] for r in records if r['scenario'] == scenario and r['mode'] == mode]
+    return (np.mean(vals), np.std(vals)) if vals else (0.0, 0.0)
 
 
-# ── 통계 ──
-def stats(results, key):
-    vals = [r[key] for r in results]
-    return np.mean(vals), np.std(vals)
-
-
-print("\n" + "=" * 70)
-print(f"{'메트릭':25s}  {'Fixed (mean±std)':>20s}  {'RL (mean±std)':>20s}  {'개선':>6s}")
-print("=" * 70)
-for key, label, lower_is_better in [
-    ('total_reward',     'Total Reward',     False),
-    ('avg_waiting_time', 'Avg Waiting Time', True),
-    ('max_waiting_time', 'Max Waiting Time', True),
-    ('avg_queue',        'Avg Queue Length', True),
-    ('max_queue',        'Max Queue Length', True),
-]:
-    fm, fs = stats(fixed_results, key)
-    rm, rs = stats(rl_results, key)
-    if lower_is_better:
-        imp = (fm - rm) / max(fm, 1e-9) * 100
-    else:
-        imp = (rm - fm) / max(abs(fm), 1e-9) * 100
-    print(f"{label:25s}  {fm:8.2f} ± {fs:6.2f}    {rm:8.2f} ± {rs:6.2f}    {imp:+5.1f}%")
-print("=" * 70)
+print("\n" + "=" * 78)
+print(f"{'시나리오':12s} {'메트릭':16s} {'Fixed':>16s} " +
+      (f"{'SmartSignal':>16s} {'개선':>7s}" if 'rl' in MODES else ""))
+print("=" * 78)
+for name in EVAL_SCENARIOS:
+    for key, label in [('avg_waiting_time', 'Avg Wait'),
+                       ('avg_queue', 'Avg Queue'),
+                       ('max_queue', 'Max Queue')]:
+        fm, fs = agg(name, 'fixed', key)
+        row = f"{name:12s} {label:16s} {fm:9.2f}±{fs:5.2f}"
+        if 'rl' in MODES:
+            rm, rs = agg(name, 'rl', key)
+            imp = (fm - rm) / max(fm, 1e-9) * 100
+            row += f" {rm:9.2f}±{rs:5.2f} {imp:+6.1f}%"
+        print(row)
+    print("-" * 78)
 
 
 # ── CSV 저장 ──
 os.makedirs("results", exist_ok=True)
-out_csv = "results/evaluation_30ep.csv"
+out_csv = "results/evaluation.csv"
 with open(out_csv, "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=fixed_results[0].keys())
+    w = csv.DictWriter(f, fieldnames=records[0].keys())
     w.writeheader()
-    w.writerows(fixed_results)
-    w.writerows(rl_results)
-print(f"\n[INFO] CSV 저장: {out_csv}")
+    w.writerows(records)
+print(f"[INFO] CSV 저장: {out_csv}")
 
 
-# ── 비교 그래프 (4-panel) ──
-fig, axes = plt.subplots(2, 2, figsize=(14, 9))
+# ── 차트 (시나리오별 그룹 막대: avg_waiting_time, avg_queue) ──
+scen = list(EVAL_SCENARIOS.keys())
+x = np.arange(len(scen))
+width = 0.38
+fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 fig.patch.set_facecolor('#0D1B2A')
-fig.suptitle('Fixed Signal vs DQN (1000ep) — 30 Episodes',
-             color='white', fontsize=15, fontweight='bold')
+fig.suptitle('Fixed vs SmartSignal — 시나리오별 비교', color='white',
+             fontsize=15, fontweight='bold')
 
-metrics = [
-    ('total_reward',     'Total Reward (higher better)',    False),
-    ('avg_waiting_time', 'Avg Waiting Time (lower better)', True),
-    ('avg_queue',        'Avg Queue Length (lower better)', True),
-    ('max_queue',        'Max Queue Length (lower better)', True),
-]
-
-for ax, (key, title, lower_better) in zip(axes.flat, metrics):
+for ax, (key, title) in zip(axes, [('avg_waiting_time', 'Avg Waiting Time (lower better)'),
+                                    ('avg_queue', 'Avg Queue Length (lower better)')]):
     ax.set_facecolor('#0D1B2A')
-    fixed_vals = [r[key] for r in fixed_results]
-    rl_vals    = [r[key] for r in rl_results]
-
-    fm, fs = np.mean(fixed_vals), np.std(fixed_vals)
-    rm, rs = np.mean(rl_vals),    np.std(rl_vals)
-
-    bars = ax.bar(['Fixed', 'RL (DQN 1000ep)'], [fm, rm],
-                  yerr=[fs, rs],
-                  color=['#546E7A', '#00897B'],
-                  capsize=10, edgecolor='white', linewidth=0.5, width=0.5)
+    f_mean = [agg(s, 'fixed', key)[0] for s in scen]
+    f_std = [agg(s, 'fixed', key)[1] for s in scen]
+    if 'rl' in MODES:
+        ax.bar(x - width / 2, f_mean, width, yerr=f_std, label='Fixed',
+               color='#546E7A', capsize=5, edgecolor='white', linewidth=0.5)
+        r_mean = [agg(s, 'rl', key)[0] for s in scen]
+        r_std = [agg(s, 'rl', key)[1] for s in scen]
+        ax.bar(x + width / 2, r_mean, width, yerr=r_std, label='SmartSignal',
+               color='#00897B', capsize=5, edgecolor='white', linewidth=0.5)
+    else:
+        ax.bar(x, f_mean, width * 1.5, yerr=f_std, label='Fixed',
+               color='#546E7A', capsize=5, edgecolor='white', linewidth=0.5)
     ax.set_title(title, color='white', fontsize=11, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(scen, color='white', rotation=15)
     ax.tick_params(colors='white')
     ax.spines[:].set_color('#00897B')
     ax.grid(axis='y', alpha=0.15, color='white')
-
-    # 값 라벨
-    for bar, val, std in zip(bars, [fm, rm], [fs, rs]):
-        ax.text(bar.get_x() + bar.get_width() / 2,
-                val + (std if val > 0 else -std) * 1.1,
-                f'{val:.2f}\n±{std:.2f}',
-                ha='center', va='bottom' if val > 0 else 'top',
-                color='white', fontsize=9, fontweight='bold')
-
-    if lower_better:
-        imp = (fm - rm) / max(fm, 1e-9) * 100
-    else:
-        imp = (rm - fm) / max(abs(fm), 1e-9) * 100
-    ax.text(0.5, 0.92, f'Improvement: {imp:+.1f}%',
-            transform=ax.transAxes, ha='center', color='#00BCD4',
-            fontsize=11, fontweight='bold',
-            bbox=dict(boxstyle='round,pad=0.3', facecolor='#1a2d40',
-                      edgecolor='#00BCD4'))
+    ax.legend(facecolor='#1a2d40', labelcolor='white')
 
 plt.tight_layout()
-out_png = 'results/evaluation_chart_1000ep.png'
+out_png = "results/evaluation_by_scenario.png"
 plt.savefig(out_png, dpi=150, bbox_inches='tight', facecolor='#0D1B2A')
 print(f"[INFO] 그래프 저장: {out_png}")

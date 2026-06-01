@@ -65,6 +65,8 @@ results/checkpoint_ep[1-9][0-9][0-9][0-9].pth.bak
 results_*.bak/
 results.bak/
 
+# 최종 모델(results/smart_signal.pth)은 강제 추적 — checkpoint_ep* 만 무시
+
 # =====================================================
 # IDE / OS
 # =====================================================
@@ -77,11 +79,3 @@ results.bak/
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# =====================================================
-# v2 학습 결과 (대용량, 학습 후 추가될 것)
-# =====================================================
-results_v2/checkpoint_ep[1-9][0-9].pth
-results_v2/checkpoint_ep[1-9][0-9][0-9].pth
-results_v2_failed_800veh/checkpoint_ep[1-9][0-9].pth
-results_v2_failed_800veh/checkpoint_ep[1-9][0-9][0-9].pth

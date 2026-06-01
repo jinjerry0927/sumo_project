@@ -6,10 +6,16 @@
 
 고정된 신호 주기는 시간대별 교통량 변화에 대응하지 못해 불필요한 대기 시간을 만든다.
 본 프로젝트는 **DQN(Deep Q-Network)** 강화학습 에이전트가 SUMO 시뮬레이션 환경에서
-신호 타이밍을 스스로 학습하여 평균 대기 시간을 최소화하는 시스템을 구현한다.
+**다양한 교통상황(한산·평시·피크·비대칭·과포화)** 에 대해 신호 타이밍을 스스로 학습하고,
+**현실적 고정신호 기준선(Fixed-Avg / Webster 최적 고정주기)** 과 정량 비교하여 개선 효과를 입증한다.
 
-추가로 **YOLOv10** 으로 실제 교통 카메라 영상에서 차량을 탐지하고,
-**라즈베리파이 + LED** 미니 신호등으로 학습된 정책을 실물로 시연한다.
+- 1학기: **추상 4지 교차로 (3차선 × 4-phase 보호좌회전) 중심**, SUMO 시뮬레이션으로 완결
+- 2학기: 실제 교차로 1곳을 SUMO로 모델링하여 확장
+
+> **방향 재설정(2026-06-02)**: 실시간 CCTV 영상 인지(YOLO) 줄기는 4방향 카메라 부재 등
+> 데이터 한계로 보류하고, SUMO 시뮬레이션 비교 검증으로 목표를 좁혔다.
+> 관련 코드는 삭제하지 않고 `archive/perception_track/`에 보존한다.
+> 전체 계획·부서 구조는 **[docs/project_charter.md](docs/project_charter.md)** 참조.
 
 ## 🎯 핵심 결과 (1000 에피소드 학습 완료)
 
@@ -24,25 +30,21 @@
 
 → `results/evaluation_chart_1000ep.png`, `results/reward_convergence_1000.png`
 
-## 🏗️ 시스템 아키텍처
+## 🏗️ 시스템 아키텍처 (SUMO 전용)
 
 ```
-┌──────────── PC (학습/시뮬레이션) ──────────────┐
-│                                              │
-│  SUMO 시뮬레이션 ── DQN 학습 ── 학습된 정책       │
-│                                  │            │
-│        ┌─────────────────────────┼──┐         │
-│        ▼                         ▼  │         │
-│   SUMO GUI (시각화)        현재 신호 phase     │
-│                                  │            │
-│  YOLO + 교통카메라 (별도 트랙: 차량 탐지)      │
-│                                  │            │
-└──────────────────────────────────┼────────────┘
-                                   │ WiFi/Serial
-                                   ▼
-                  ┌── 라즈베리파이 + 미니 신호등 ──┐
-                  │  GPIO → 4방향 LED 점등        │
-                  └──────────────────────────────┘
+┌──────────── 시뮬레이션 환경팀 (SimEnv) ───────────┐
+│  SUMO 네트워크 + 교통 시나리오 5종 (랜덤/동결)      │
+└───────────────┬───────────────────┬──────────────┘
+                ▼                   ▼
+   ┌─ 강화학습팀 (RL) ─┐   ┌─ 베이스라인·평가팀 (Eval) ─┐
+   │  DQN 학습 → 정책   │   │  Fixed-Avg / Webster        │
+   │  (.pth 체크포인트) │──▶│  시나리오별 통계 비교        │
+   └──────────────────┘   └──────────────┬─────────────┘
+                                         ▼
+                          ┌─ 시각화·보고팀 (Viz) ─┐
+                          │  비교 차트 / GUI 데모   │
+                          └───────────────────────┘
 ```
 
 ## 📂 폴더 구조
@@ -53,43 +55,27 @@ sumo_project/
 ├── requirements.txt
 ├── .gitignore
 │
-├── network_v1/              # 1차 환경 (4-way × 1차선, 2-phase)
-│   ├── intersection.nod.xml
-│   ├── intersection.edg.xml
+├── network/                 # SmartSignal 환경 (4-way × 3차선, 4-phase + 보호좌회전)
+│   ├── intersection.nod.xml / .edg.xml / .con.xml
 │   ├── intersection.net.xml
-│   ├── intersection.rou.xml
+│   ├── intersection.rou.xml   # 학습 시 매 ep 랜덤 생성됨
 │   └── intersection.sumocfg
 │
-├── network_v2/              # 2차 환경 (4-way × 3차선, 4-phase + 보호좌회전)
-│   ├── intersection.nod.xml
-│   ├── intersection.edg.xml
-│   ├── intersection.con.xml
-│   ├── intersection.net.xml
-│   ├── intersection.rou.xml
-│   └── intersection.sumocfg
-│
-├── network_geumjanggyo/     # 실제 교차로 OSM 모델 (참고용)
-│
-├── dqn_agent.py             # v1 환경 학습
-├── dqn_agent_v2.py          # v2 환경 학습 (state/action 자동 감지)
-├── evaluate.py              # Fixed vs RL 비교 (30 ep + 메트릭)
-├── demo.py                  # SUMO GUI 데모
+├── smart_signal.py          # ★ SmartSignal DQN 학습 (state/action 자동 감지)
+├── evaluate.py              # Fixed vs SmartSignal 비교 (30 ep + 메트릭)
+├── demo.py                  # SUMO GUI 데모 (rl / fixed)
 ├── plot_results.py          # 학습 수렴 그래프
-├── realtime_detect.py       # YOLO 차량 탐지
-├── test_env.py              # SUMO 환경 동작 확인
+├── test_env.py              # SUMO 환경 스모크 테스트
 │
-├── results/                 # v1 학습 결과
-│   ├── checkpoint_ep1000.pth
-│   ├── dqn_final.pth
-│   ├── training_log.csv
-│   ├── evaluation_30ep.csv
-│   ├── reward_convergence_1000.png
-│   └── evaluation_chart_1000ep.png
+├── docs/
+│   └── project_charter.md   # 재정립 계획 + 부서 구조 (필독)
 │
-└── archive/                 # 오래된 파일 보관
-    ├── compare.py           # evaluate.py 이전 5ep 평가
-    ├── reward_convergence_200ep.png
-    └── old_checkpoints/
+├── results/                 # SmartSignal 학습 산출물 (현재 빈 상태 → 재학습)
+│
+└── archive/                 # 보관 (삭제 안 함)
+    ├── perception_track/    # CCTV·YOLO·ITS 줄기 (보류)
+    ├── v1/                  # 구 v1 환경·코드·결과 일체
+    └── training_history/    # 구 v2 학습 로그 (발산 분석용)
 ```
 
 ## ⚙️ 설치
@@ -111,37 +97,26 @@ pip install -r requirements.txt
 python test_env.py
 ```
 
-### v1 환경 학습 (4-way × 1차선)
+### SmartSignal 학습 (처음부터)
 ```powershell
-# 처음부터
-python dqn_agent.py --episodes 1000
+python smart_signal.py --episodes 1000
 
 # 체크포인트에서 이어서
-python dqn_agent.py --resume results/checkpoint_ep1000.pth --episodes 1500
+python smart_signal.py --resume results/checkpoint_ep100.pth --episodes 1000
 ```
 
-### v2 환경 학습 (4-way × 3차선, 4-phase)
-```powershell
-python dqn_agent_v2.py --episodes 1000
-```
-
-### 평가 (Fixed vs RL 30 episode 비교)
+### 평가 (Fixed vs SmartSignal 30 episode 비교)
 ```powershell
 python evaluate.py
 ```
 
 ### SUMO GUI 데모
 ```powershell
-# 학습된 RL 정책으로 시연
+# 학습된 SmartSignal 정책으로 시연
 python demo.py --mode rl --duration 1800
 
 # 고정 신호로 시연
 python demo.py --mode fixed --duration 1800
-```
-
-### YOLO 차량 탐지 (영상 입력)
-```powershell
-python realtime_detect.py
 ```
 
 ## 🛠️ 기술 스택
@@ -150,9 +125,9 @@ python realtime_detect.py
 |------|----|
 | **시뮬레이션** | SUMO 1.20+, sumo-rl 1.4.5 |
 | **강화학습** | PyTorch (Double DQN, Huber Loss, Gradient Clipping) |
-| **차량 탐지** | YOLOv10 (ultralytics), OpenCV |
-| **하드웨어** | Raspberry Pi 5 (예정), GPIO LED |
+| **기준선** | Fixed-time, Webster 최적 고정주기, (선택) SUMO actuated TLS |
 | **시각화** | matplotlib |
+| ~~차량 탐지~~ | ~~YOLOv8/v10, OpenCV~~ → `archive/perception_track/` 보존 |
 
 ## 📈 DQN 하이퍼파라미터
 
@@ -176,11 +151,14 @@ python realtime_detect.py
 - [x] 6차: Double DQN 전환 + 200ep 학습
 - [x] 7차: 405ep 학습 + Fixed vs RL 시연 영상
 - [x] 8차: 실제 영상(금장교네거리) YOLO 탐지 시도 + 한계 분석
-- [x] **1000ep 학습 완료 + 30ep 평가 + 4-panel 메트릭 비교**
-- [ ] v2 환경(3차선 × 4-phase) 학습
-- [ ] YOLO 영상 탐지 고도화 (주간 + 신호등 시점)
-- [ ] 라즈베리파이 5 도착 → 미니 신호등 통신 + GPIO 제어
-- [ ] 최종 시연 + 보고서 작성
+- [x] (구 v1) 1000ep 학습 + 30ep 평가 — `archive/v1/`로 보관
+- [x] **방향 재설정 + CCTV 줄기 archive (2026-06-02)** → [docs/project_charter.md](docs/project_charter.md)
+- [x] **M0**: v1 정리 + SmartSignal 개명 + 도구 재타겟 (스모크테스트 통과)
+- [ ] **M1**: 시나리오 5종 동결 + 평가 시나리오 루프
+- [ ] **M2**: SmartSignal 재학습 완주 + baseline (Fixed / Webster / actuated)
+- [ ] **M3**: 시나리오별 RL vs baseline 비교 + 차트 + GUI 데모
+- [ ] **M4**: 발표자료 + README·보고서 갱신
+- [ ] (2학기) 실제 교차로 1곳 SUMO 모델링 확장
 
 ## 📚 참고 문헌
 

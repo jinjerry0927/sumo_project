@@ -1,5 +1,7 @@
 """
-DQN Agent for v2 environment (4-way x 3-lane intersection).
+SmartSignal — DQN 기반 적응형 교차로 신호 제어 (프로젝트 최종 모델).
+
+대상 환경: 4지 × 3차선 교차로 (network/), 4-phase 보호좌회전.
 
 현실적 적응형 신호 제어 (Adaptive Traffic Signal Control):
 - Phase는 정해진 사이클 순서로만 진행 (NS직진 → NS좌 → EW직진 → EW좌 → ...)
@@ -50,11 +52,11 @@ def set_sumo_home(path=None):
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--sumo_home",  default=None)
-parser.add_argument("--net",        default="network_v2/intersection.net.xml")
-parser.add_argument("--route",      default="network_v2/intersection.rou.xml")
+parser.add_argument("--net",        default="network/intersection.net.xml")
+parser.add_argument("--route",      default="network/intersection.rou.xml")
 parser.add_argument("--episodes",   type=int, default=1000)
 parser.add_argument("--resume",     default=None)
-parser.add_argument("--out_dir",    default="results_v2")
+parser.add_argument("--out_dir",    default="results")
 parser.add_argument("--traffic_min", type=int, default=300,
                     help="각 방향 최소 vehsPerHour (한산)")
 parser.add_argument("--traffic_max", type=int, default=1200,
@@ -65,6 +67,7 @@ set_sumo_home(args.sumo_home)
 os.makedirs(args.out_dir, exist_ok=True)
 
 import sumo_rl
+from scenarios import random_demand, write_routes   # 트래픽 생성은 scenarios.py 공용 정의 사용
 
 
 # ── 안전 제약 (현실 도로 기준) ─────────────────────
@@ -93,46 +96,10 @@ if device.type == "cuda":
     print(f"[INFO] GPU: {torch.cuda.get_device_name(0)}")
 
 
-# ── Random 트래픽 생성 (매 episode 다른 패턴) ──
-TURN_TABLE = {
-    'N': [('S', 'straight'), ('W', 'right'), ('E', 'left')],
-    'S': [('N', 'straight'), ('E', 'right'), ('W', 'left')],
-    'E': [('W', 'straight'), ('N', 'right'), ('S', 'left')],
-    'W': [('E', 'straight'), ('S', 'right'), ('N', 'left')],
-}
-TURN_RATIO = [0.60, 0.25, 0.15]
-
-
+# ── Random 트래픽 생성 (매 episode 다른 패턴, scenarios.py 정의 사용) ──
 def generate_random_routes(out_path, t_min, t_max):
-    """각 방향 vehsPerHour를 [t_min, t_max]에서 랜덤 샘플링하여 .rou.xml 작성."""
-    flows_xml = []
-    summary = {}
-    for d_in, turns in TURN_TABLE.items():
-        total = int(np.random.randint(t_min, t_max + 1))
-        summary[d_in] = total
-        for (d_out, _), ratio in zip(turns, TURN_RATIO):
-            veh = max(1, int(total * ratio))
-            flows_xml.append(
-                f'    <flow id="f_{d_in}{d_out}" type="car" route="{d_in}_{d_out}" '
-                f'begin="0" end="3600" vehsPerHour="{veh}"/>'
-            )
-    routes_def = '\n'.join(
-        f'    <route id="{d_in}_{d_out}" edges="{d_in}2C C2{d_out}"/>'
-        for d_in, turns in TURN_TABLE.items() for d_out, _ in turns
-    )
-    content = f'''<?xml version="1.0" encoding="UTF-8"?>
-<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-    <vType id="car" accel="2.6" decel="4.5" sigma="0.5" length="5"
-           maxSpeed="13.89" departLane="best"/>
-
-{routes_def}
-
-{chr(10).join(flows_xml)}
-</routes>
-'''
-    with open(out_path, 'w', encoding='utf-8') as f:
-        f.write(content)
-    return summary
+    """각 방향 수요를 [t_min, t_max]에서 랜덤 샘플링하여 .rou.xml 작성, 수요 dict 반환."""
+    return write_routes(out_path, random_demand(t_min, t_max))
 
 
 # ── 환경 검증 (probe — random route 한 번 생성해서 차원 확인) ──
@@ -341,7 +308,7 @@ for episode in range(start_episode, args.episodes + 1):
 
 
 csv_file.close()
-final_path = os.path.join(args.out_dir, "dqn_final.pth")
+final_path = os.path.join(args.out_dir, "smart_signal.pth")
 torch.save({
     "policy_net":       policy_net.state_dict(),
     "state_size":       STATE_SIZE,

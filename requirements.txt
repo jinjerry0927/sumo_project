@@ -11,12 +11,8 @@ gymnasium>=0.29
 numpy>=1.24
 matplotlib>=3.7
 
-# ── YOLO 차량 탐지 ──
-ultralytics>=8.0
-opencv-python>=4.8
-
-# ── perception 모듈 (ITS OpenAPI 호출) ──
-requests>=2.31
-
-# ── 선택: YouTube 라이브 fallback (perception/run_realtime.py --source youtube) ──
-# pip install yt-dlp   # 필요할 때만 설치
+# ── (보류) perception/CCTV 줄기 — archive/perception_track/ 에서만 사용 ──
+# 1학기 SUMO 전용 작업엔 불필요. 보관 코드 실행 시에만 설치.
+# ultralytics>=8.0      # YOLO 차량 탐지
+# opencv-python>=4.8    # 영상 처리
+# requests>=2.31        # ITS OpenAPI 호출
