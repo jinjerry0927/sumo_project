@@ -51,12 +51,12 @@ tripinfo.xml
 fcd-output.xml
 
 # =====================================================
-# 학습 결과 — 중간 체크포인트는 추적 안 함
-# (results/dqn_final.pth 와 checkpoint_ep1000.pth 는 강제 추적)
+# 학습 결과 — 중간 체크포인트는 추적 안 함 (최종 smart_signal.pth만 커밋)
 # =====================================================
-results/checkpoint_ep[1-9][0-9].pth
-results/checkpoint_ep[1-9][0-9][0-9].pth
-results/checkpoint_ep[1-9][0-9][0-9][0-9].pth.bak
+results/checkpoint_ep*.pth
+
+# 매 에피소드 생성되는 route 파일 (재현 가능, 추적 불필요)
+network/intersection.rou.xml
 
 # 학습 중 임시 로그
 *.tmp.log

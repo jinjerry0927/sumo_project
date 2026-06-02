@@ -199,7 +199,7 @@ x = np.arange(len(scen))
 width = 0.38
 fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 fig.patch.set_facecolor('#0D1B2A')
-fig.suptitle('Fixed vs SmartSignal — 시나리오별 비교', color='white',
+fig.suptitle('Fixed vs SmartSignal — Per-Scenario Comparison', color='white',
              fontsize=15, fontweight='bold')
 
 for ax, (key, title) in zip(axes, [('avg_waiting_time', 'Avg Waiting Time (lower better)'),
