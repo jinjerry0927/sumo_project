@@ -130,7 +130,7 @@
 |---|---|---|
 | **M0 — 정리·개명** ✅ | v1 → `archive/v1/`, v2 학습산출물 삭제, SmartSignal 개명, 도구 재타겟·스모크테스트 | PM |
 | **M1 — 기반** ✅ | 시나리오 5종 동결(`scenarios.py`) / 평가 시나리오 루프(페어드 seed) | ①③ |
-| **M2 — 학습·기준선** | SmartSignal 재학습 완주 / Webster baseline 추가 | ②③ |
+| **M2 — 학습·기준선** | [x] SmartSignal 1000ep 학습 + 시나리오 평가(5종 전부 개선) / [ ] Webster baseline | ②③ |
 | **M3 — 비교** | 시나리오별 SmartSignal vs baseline 비교 / 차트 / GUI 데모 | ③④ |
 | **M4 — 산출** | 발표자료 / README·보고서 갱신 | ④ PM |
 
