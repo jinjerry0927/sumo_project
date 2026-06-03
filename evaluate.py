@@ -1,15 +1,20 @@
 """
-SmartSignal(DQN) vs 고정신호 — 시나리오별 평가 (M1).
+Fixed / Webster / SmartSignal(DQN) 3자 비교 — 시나리오별 평가 (M2).
 
 핵심: 평가용 동결 시나리오 5종(scenarios/eval/*.rou.xml)을 순회하며,
-시나리오마다 Fixed 와 SmartSignal 을 **동일 seed(동일 트래픽)** 로 비교 → 차이는 신호 전략 때문만.
+시나리오마다 3개 제어기를 **동일 seed(동일 트래픽)** 로 비교 → 차이는 신호 전략 때문만.
 
-제어 규약은 smart_signal.py 와 동일:
-- state 29차원 (앞 num_green_phases = phase one-hot)
-- DQN 출력 0=Keep / 1=Next → green phase 사이클 전환
-- 고정신호 baseline: green phase를 일정 간격으로 순환
+세 제어기 모두 동일 안전 봉투(min_green=15 / max_green=60) 하에서 동작하며,
+green phase 를 어떻게 배분하느냐에서만 차이 난다:
+- fixed   : green phase 를 균등 간격으로 순환 (단순 고정신호)
+- webster : 수요 기반 최적 green split (baselines.webster_schedule, 최적 고정신호)
+- rl      : DQN 출력 0=Keep / 1=Next → 적응형 사이클 전환 (state 29차원)
 
-⚠️ TODO (차터 M2): Webster 최적 고정주기 baseline 추가, throughput(도착차량) 메트릭.
+teleport: sumo_rl 기본은 교착차량 순간이동 off(-1) → 빡빡한 고정주기가 교차로 박스를
+영구 교착시키는 시뮬 아티팩트가 생김. SUMO 기본값(300s)을 복원해 세 모드 동일 조건에서
+교착을 해소한다(run_episode 참고).
+
+⚠️ TODO (차터 M2): throughput(도착차량) 메트릭은 M3 으로 이월.
 실행:
     python evaluate.py                 # 기본: 시나리오당 10ep
     python evaluate.py --episodes 30   # 통계 강화
@@ -17,6 +22,7 @@ SmartSignal(DQN) vs 고정신호 — 시나리오별 평가 (M1).
 import os
 import sys
 import csv
+import time
 import argparse
 import numpy as np
 import torch
@@ -24,6 +30,7 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 
 from scenarios import EVAL_SCENARIOS, freeze_eval_scenarios
+from baselines import webster_schedule
 
 
 def set_sumo_home():
@@ -84,13 +91,15 @@ if os.path.isfile(args.model):
     policy_net = DQN(state_size, action_size).to(device)
     policy_net.load_state_dict(weights)
     policy_net.eval()
-    MODES = ["fixed", "rl"]
+    MODES = ["fixed", "webster", "rl"]
     print(f"[INFO] 모델 로드: {args.model} "
           f"(state={state_size}, action={action_size}, green_phases={NUM_GREEN_PHASES})")
 else:
-    MODES = ["fixed"]
-    print(f"[WARN] 모델 없음({args.model}) → Fixed 신호만 평가 (하베스 점검 모드).")
+    MODES = ["fixed", "webster"]
+    print(f"[WARN] 모델 없음({args.model}) → Fixed/Webster 만 평가 (SmartSignal 제외).")
     print("       SmartSignal 비교는 'python smart_signal.py' 학습 후 다시 실행하세요.")
+
+LABELS = {"fixed": "Fixed", "webster": "Webster", "rl": "SmartSignal"}
 
 # ── 시나리오 파일 확보 (없으면 자동 생성) ──
 scenario_paths = {}
@@ -102,20 +111,36 @@ for name in EVAL_SCENARIOS:
     scenario_paths[name] = p
 
 
-def run_episode(mode, route_file, seed):
-    """한 에피소드 실행 → 메트릭 dict."""
+def run_episode(mode, route_file, seed, demand=None):
+    """한 에피소드 실행 → 메트릭 dict.
+
+    mode == 'webster' 인 경우 demand(방향별 veh/h)로 green split 스케줄을 계산해 순환한다.
+    """
     env = sumo_rl.SumoEnvironment(
         net_file=args.net, route_file=route_file, use_gui=False,
         num_seconds=args.seconds, min_green=MIN_GREEN, max_green=MAX_GREEN,
         single_agent=True, sumo_warnings=False, sumo_seed=seed,
+        # sumo_rl 기본은 teleport off(-1) → 과포화/빡빡한 고정주기에서 교차로 박스가
+        # 영구 교착(흡수상태)되는 시뮬 아티팩트 발생. SUMO 기본값(300s)을 복원해
+        # 세 제어기 동일 조건에서 교착을 해소(공정). 자세한 진단은 커밋 메시지 참고.
+        time_to_teleport=300,
+        additional_sumo_cmd="--no-step-log",   # 콘솔의 'Step #...' 스팸 억제
     )
     obs, _ = env.reset()
+    # Webster: env 의 결정 주기(delta_time)에 맞춘 phase 스케줄 1회 계산
+    webster_sched = None
+    if mode == "webster":
+        webster_sched, _ = webster_schedule(
+            demand, delta_time=getattr(env, "delta_time", 5),
+            min_green=MIN_GREEN, max_green=MAX_GREEN)
     total_reward, done, step = 0.0, False, 0
     waits, queues = [], []
     while not done:
         cur_phase = int(np.array(obs[:NUM_GREEN_PHASES]).argmax())
         if mode == "fixed":
             action = (step // args.fixed_hold) % NUM_GREEN_PHASES
+        elif mode == "webster":
+            action = webster_sched[step % len(webster_sched)]
         else:
             with torch.no_grad():
                 q = policy_net(torch.FloatTensor(np.array(obs, dtype=np.float32)).to(device))
@@ -139,24 +164,52 @@ def run_episode(mode, route_file, seed):
     }
 
 
+# ── CSV 저장 헬퍼 (시나리오마다 호출 → 중간 끊겨도 완료분 보존) ──
+os.makedirs("results", exist_ok=True)
+OUT_CSV = "results/evaluation.csv"
+
+
+def flush_csv(recs):
+    if not recs:
+        return
+    with open(OUT_CSV, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=recs[0].keys())
+        w.writeheader()
+        w.writerows(recs)
+
+
 # ── 평가 루프 (시나리오 × 모드 × 에피소드, 페어드 seed) ──
 records = []   # 개별 에피소드 결과
-print(f"\n평가 시작: {len(EVAL_SCENARIOS)} 시나리오 × {args.episodes}ep × {MODES}\n")
-for name in EVAL_SCENARIOS:
+n_scen = len(EVAL_SCENARIOS)
+total_eps = n_scen * args.episodes * len(MODES)
+t_start = time.time()
+done_eps = 0
+print(f"\n평가 시작: {n_scen} 시나리오 × {args.episodes}ep × {MODES}  (총 {total_eps} 에피소드)\n")
+for si, name in enumerate(EVAL_SCENARIOS, 1):
     route = scenario_paths[name]
+    demand = EVAL_SCENARIOS[name]
+    t_scen = time.time()
+    print(f"[{si}/{n_scen}] {name} 시작...")
     for ep in range(args.episodes):
-        seed = args.seed_base + ep   # Fixed/RL 동일 seed → 동일 트래픽
+        seed = args.seed_base + ep   # 모든 모드 동일 seed → 동일 트래픽
         for mode in MODES:
-            m = run_episode(mode, route, seed)
+            m = run_episode(mode, route, seed, demand=demand)
             records.append({'scenario': name, 'mode': mode, 'episode': ep, 'seed': seed, **m})
-    # 시나리오 요약 출력
-    line = f"[{name:11s}]"
+            done_eps += 1
+        # 에피소드 단위 진행률 (모든 모드 끝날 때마다)
+        elapsed = time.time() - t_start
+        eta = elapsed / done_eps * (total_eps - done_eps)
+        print(f"    {name:11s} ep {ep+1:2d}/{args.episodes}  "
+              f"({done_eps}/{total_eps}, 경과 {elapsed/60:4.1f}분, 남은 ~{eta/60:4.1f}분)")
+    # 시나리오 요약 + 중간저장
+    line = f"[{name:11s} 완료 {(time.time()-t_scen)/60:.1f}분]"
     for mode in MODES:
         w = [r['avg_waiting_time'] for r in records if r['scenario'] == name and r['mode'] == mode]
         q = [r['avg_queue'] for r in records if r['scenario'] == name and r['mode'] == mode]
-        label = 'Fixed' if mode == 'fixed' else 'Smart'
-        line += f"  {label}: wait={np.mean(w):7.1f} queue={np.mean(q):5.1f}"
+        line += f"  {LABELS[mode]}: wait={np.mean(w):7.1f} queue={np.mean(q):5.1f}"
     print(line)
+    flush_csv(records)   # 시나리오 단위 중간저장 (크래시 보험)
+    print(f"    [중간저장] {OUT_CSV} ({len(records)}행)\n")
 
 
 # ── 종합 표 ──
@@ -165,58 +218,59 @@ def agg(scenario, mode, key):
     return (np.mean(vals), np.std(vals)) if vals else (0.0, 0.0)
 
 
-print("\n" + "=" * 78)
-print(f"{'시나리오':12s} {'메트릭':16s} {'Fixed':>16s} " +
-      (f"{'SmartSignal':>16s} {'개선':>7s}" if 'rl' in MODES else ""))
-print("=" * 78)
+# fixed 를 기준선으로, 나머지 모드는 mean±std + (fixed 대비 개선율) 표시
+other_modes = [m for m in MODES if m != 'fixed']
+colw = 24
+header_w = 78 + colw * len(other_modes)
+print("\n" + "=" * header_w)
+hdr = f"{'시나리오':12s} {'메트릭':12s} {'Fixed':>16s}"
+for m in other_modes:
+    hdr += f" {LABELS[m] + ' (개선)':>{colw}s}"
+print(hdr)
+print("=" * header_w)
 for name in EVAL_SCENARIOS:
     for key, label in [('avg_waiting_time', 'Avg Wait'),
                        ('avg_queue', 'Avg Queue'),
                        ('max_queue', 'Max Queue')]:
         fm, fs = agg(name, 'fixed', key)
-        row = f"{name:12s} {label:16s} {fm:9.2f}±{fs:5.2f}"
-        if 'rl' in MODES:
-            rm, rs = agg(name, 'rl', key)
-            imp = (fm - rm) / max(fm, 1e-9) * 100
-            row += f" {rm:9.2f}±{rs:5.2f} {imp:+6.1f}%"
+        row = f"{name:12s} {label:12s} {fm:9.2f}±{fs:5.2f}"
+        for m in other_modes:
+            mm, ms = agg(name, m, key)
+            imp = (fm - mm) / max(fm, 1e-9) * 100
+            row += f" {mm:9.2f}±{ms:5.2f}({imp:+5.1f}%)"
         print(row)
-    print("-" * 78)
+    print("-" * header_w)
 
 
-# ── CSV 저장 ──
-os.makedirs("results", exist_ok=True)
-out_csv = "results/evaluation.csv"
-with open(out_csv, "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=records[0].keys())
-    w.writeheader()
-    w.writerows(records)
-print(f"[INFO] CSV 저장: {out_csv}")
+# ── CSV 최종 저장 (시나리오마다 중간저장했지만 마지막으로 한 번 더 확정) ──
+flush_csv(records)
+print(f"[INFO] CSV 저장: {OUT_CSV}")
 
 
-# ── 차트 (시나리오별 그룹 막대: avg_waiting_time, avg_queue) ──
+# ── 차트 (시나리오별 그룹 막대, N개 모드 일반화) ──
+STYLE = {'fixed': ('#546E7A', 'Fixed'),
+         'webster': ('#8E7CC3', 'Webster'),
+         'rl': ('#00897B', 'SmartSignal')}
 scen = list(EVAL_SCENARIOS.keys())
 x = np.arange(len(scen))
-width = 0.38
+n = len(MODES)
+width = 0.8 / n
 fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 fig.patch.set_facecolor('#0D1B2A')
-fig.suptitle('Fixed vs SmartSignal — Per-Scenario Comparison', color='white',
+title_modes = ' vs '.join(STYLE.get(m, ('', m))[1] for m in MODES)
+fig.suptitle(f'{title_modes} — Per-Scenario Comparison', color='white',
              fontsize=15, fontweight='bold')
 
 for ax, (key, title) in zip(axes, [('avg_waiting_time', 'Avg Waiting Time (lower better)'),
                                     ('avg_queue', 'Avg Queue Length (lower better)')]):
     ax.set_facecolor('#0D1B2A')
-    f_mean = [agg(s, 'fixed', key)[0] for s in scen]
-    f_std = [agg(s, 'fixed', key)[1] for s in scen]
-    if 'rl' in MODES:
-        ax.bar(x - width / 2, f_mean, width, yerr=f_std, label='Fixed',
-               color='#546E7A', capsize=5, edgecolor='white', linewidth=0.5)
-        r_mean = [agg(s, 'rl', key)[0] for s in scen]
-        r_std = [agg(s, 'rl', key)[1] for s in scen]
-        ax.bar(x + width / 2, r_mean, width, yerr=r_std, label='SmartSignal',
-               color='#00897B', capsize=5, edgecolor='white', linewidth=0.5)
-    else:
-        ax.bar(x, f_mean, width * 1.5, yerr=f_std, label='Fixed',
-               color='#546E7A', capsize=5, edgecolor='white', linewidth=0.5)
+    for i, m in enumerate(MODES):
+        means = [agg(s, m, key)[0] for s in scen]
+        stds = [agg(s, m, key)[1] for s in scen]
+        color, label = STYLE.get(m, ('#888888', m))
+        offset = (i - (n - 1) / 2) * width
+        ax.bar(x + offset, means, width, yerr=stds, label=label, color=color,
+               capsize=4, edgecolor='white', linewidth=0.5)
     ax.set_title(title, color='white', fontsize=11, fontweight='bold')
     ax.set_xticks(x)
     ax.set_xticklabels(scen, color='white', rotation=15)

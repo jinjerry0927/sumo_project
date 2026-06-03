@@ -109,9 +109,26 @@
 - **1학기 할일**
   - [x] `evaluate.py`를 SmartSignal(29D, Keep/Next) + 고정신호 사이클 baseline으로 일반화
   - [x] **시나리오 5종 루프 + 페어드 seed**(Fixed/RL 동일 트래픽) → mean±std + 개선율 (M1 ✅)
-  - [ ] `baselines.py`: Webster(수요 기반 최적 고정주기) [+ Actuated 선택] 추가 (M2)
-  - [ ] throughput(도착차량) 메트릭 추가 — TraCI 필요 (M2)
-- **산출물**: `evaluate.py`(시나리오 ✅), `baselines.py`(예정), `results/evaluation.csv`
+  - [x] `baselines.py`: Webster(수요 기반 최적 고정주기) 추가 + 3자(Fixed/Webster/SmartSignal) 평가 (M2 ✅)
+  - [ ] throughput(도착차량) 메트릭 추가 — TraCI 필요 (M3 으로 이월)
+- **산출물**: `evaluate.py`, `baselines.py`, `results/evaluation.csv`(120행: 5종×8ep×3모드), `results/evaluation_by_scenario.png`
+
+> **M2 결과 (8ep 평균 대기시간, Fixed 대비 개선율)** — 5종 전부 Webster·SmartSignal이 Fixed 능가:
+>
+> | 시나리오 | Fixed | Webster | SmartSignal |
+> |---|---|---|---|
+> | low | 240.7 | 24.0 (+90%) | 107.7 (+55%) |
+> | medium | 469.7 | 242.0 (+48%) | 191.2 (+59%) |
+> | high | 3013 | 1590 (+47%) | 2367 (+21%) |
+> | asymmetric | 1626 | 840 (+48%) | 356 (+78%) |
+> | saturated | 3105 | 2985 (+4%) | 2475 (+20%) |
+>
+> **핵심 기술 결정(평가 공정성):**
+> - **teleport=300** — sumo_rl 기본(off, -1)은 빡빡한 고정주기가 교차로 박스를 영구 교착(흡수상태)시키는 시뮬 아티팩트 발생. SUMO 기본값(300s) 복원해 3모드 동일 조건. (`evaluate.py` run_episode)
+> - **Webster 실무 보정** — min_green=15 강제 시 가벼운 좌회전 phase 과배정 → 직진 굶음(medium 포화도~0.9 → 교착). 포화도 상한 `target_x=0.85` + 결정스텝 올림(ceil) 양자화로 직진 녹색 확보. 미적용 시 medium에서 Webster가 Fixed보다 5배 악화됨(실측). (`baselines.py webster_timing`)
+> - 학습 모델(`results/smart_signal.pth`)은 teleport off로 학습됐으나, 정책 자체는 불변이라 평가 teleport on과 무관(재학습 불필요).
+>
+> **다음(M3)**: throughput 메트릭, 발표용 차트 정제, GUI 데모(`demo.py --scenario --seed`로 시연영상), README·보고서 갱신.
 
 ### ④ 시각화·보고팀 (Viz & Report)
 
@@ -130,7 +147,7 @@
 |---|---|---|
 | **M0 — 정리·개명** ✅ | v1 → `archive/v1/`, v2 학습산출물 삭제, SmartSignal 개명, 도구 재타겟·스모크테스트 | PM |
 | **M1 — 기반** ✅ | 시나리오 5종 동결(`scenarios.py`) / 평가 시나리오 루프(페어드 seed) | ①③ |
-| **M2 — 학습·기준선** | [x] SmartSignal 1000ep 학습 + 시나리오 평가(5종 전부 개선) / [ ] Webster baseline | ②③ |
+| **M2 — 학습·기준선** ✅ | SmartSignal 1000ep 학습 + Webster baseline 추가 + 3자 평가(8ep, 5종 전부 Webster·SmartSignal이 Fixed 능가) | ②③ |
 | **M3 — 비교** | 시나리오별 SmartSignal vs baseline 비교 / 차트 / GUI 데모 | ③④ |
 | **M4 — 산출** | 발표자료 / README·보고서 갱신 | ④ PM |
 

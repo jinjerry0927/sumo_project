@@ -1,10 +1,19 @@
 """
-SUMO GUI 데모 — 학습된 SmartSignal 정책(rl) 또는 고정신호(fixed)를 시각적으로 시연.
+SUMO GUI 데모 — 시연영상 촬영용. 고정신호 / Webster / SmartSignal 을 시각적으로 시연.
 
-smart_signal 과 동일한 제어 규약을 따른다:
-- state: sumo-rl 29차원 (앞 num_green_phases = 현재 phase one-hot)
-- DQN 출력: 0=Keep / 1=Next  → 사이클 순서대로 green phase 전환
-- 안전 제약: min_green 15s, max_green 60s
+evaluate.py 와 동일한 조건으로 돌아간다(공정·재현):
+- 평가 시나리오 5종(--scenario)을 그대로 사용 가능
+- --seed 고정 → fixed/webster/rl 이 똑같은 트래픽을 받음 (영상에서 직접 대조 가능)
+- teleport=300 (교차로 영구 교착 방지, 평가와 동일)
+- 제어 규약: state 29차원, DQN 0=Keep/1=Next, 안전 min_green 15s / max_green 60s
+
+시연영상 추천 흐름 (같은 트래픽에서 대조):
+    python demo.py --mode fixed   --scenario asymmetric --seed 1000   # 고정신호 → 주축 막힘
+    python demo.py --mode rl      --scenario asymmetric --seed 1000   # SmartSignal → 잘 흐름
+    python demo.py --mode webster --scenario asymmetric --seed 1000   # (선택) 최적 고정신호
+
+GUI 팁: 창이 열리면 상단 ▶ 로 시작. 'Delay (ms)' 칸에 50~100 입력하면 사람이 보기 좋은 속도.
+짧게 찍으려면 --duration 600 (10분 시뮬) 정도면 충분히 대조가 보임.
 """
 import os
 import sys
@@ -28,21 +37,44 @@ def set_sumo_home():
 
 set_sumo_home()
 import sumo_rl
+from scenarios import EVAL_SCENARIOS, freeze_eval_scenarios
+from baselines import webster_schedule
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--mode",       choices=["fixed", "rl"], default="rl",
-                    help="fixed: 고정신호 시연 / rl: 학습된 SmartSignal 시연")
+parser.add_argument("--mode",       choices=["fixed", "webster", "rl"], default="rl",
+                    help="fixed: 균등 고정신호 / webster: 최적 고정신호 / rl: SmartSignal")
+parser.add_argument("--scenario",   choices=list(EVAL_SCENARIOS), default=None,
+                    help="평가 시나리오 5종 중 하나 (생략 시 --route 사용)")
 parser.add_argument("--model",      default="results/smart_signal.pth")
 parser.add_argument("--net",        default="network/intersection.net.xml")
-parser.add_argument("--route",      default="network/intersection.rou.xml")
+parser.add_argument("--route",      default="network/intersection.rou.xml",
+                    help="--scenario 미지정 시 사용할 route 파일")
+parser.add_argument("--seed",       type=int, default=1000,
+                    help="트래픽 seed (fixed/webster/rl 동일값 → 같은 트래픽으로 대조)")
 parser.add_argument("--duration",   type=int, default=3600, help="시뮬레이션 시간(초)")
-parser.add_argument("--delay",      type=float, default=0.0, help="스텝 간 딜레이(초)")
+parser.add_argument("--delay",      type=float, default=0.0, help="스텝 간 딜레이(초, GUI 슬라이더 권장)")
+parser.add_argument("--teleport",   type=int, default=300,
+                    help="교착차량 순간이동 임계(초). -1=끔(고정신호 영구교착 연출용)")
 parser.add_argument("--fixed_hold", type=int, default=6,
                     help="고정신호: 각 green phase 유지 결정스텝 수")
 args = parser.parse_args()
 
 MIN_GREEN, MAX_GREEN = 15, 60
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# ── 시나리오 → route 파일 / 수요 결정 ──
+demand = None
+if args.scenario:
+    route_file = os.path.join("scenarios/eval", f"{args.scenario}.rou.xml")
+    if not os.path.isfile(route_file):
+        print(f"[INFO] 시나리오 파일이 없어 생성합니다: {route_file}")
+        freeze_eval_scenarios("scenarios/eval")
+    demand = EVAL_SCENARIOS[args.scenario]
+else:
+    route_file = args.route
+    if args.mode == "webster":
+        print("[ERROR] webster 모드는 수요가 필요합니다 → --scenario 를 지정하세요.")
+        sys.exit(1)
 
 
 class DQN(nn.Module):
@@ -79,42 +111,61 @@ if args.mode == "rl":
     print(f"[INFO] 모델 로드: {args.model} "
           f"(state={state_size}, action={action_size}, green_phases={num_green_phases})")
 
-print(f"\n[INFO] 모드: {'SmartSignal(RL)' if args.mode == 'rl' else '고정신호'}")
-print("[INFO] SUMO GUI가 열립니다. ▶ 버튼으로 시작하세요.\n")
+LABELS = {"fixed": "고정신호(균등)", "webster": "Webster(최적고정)", "rl": "SmartSignal(RL)"}
+print(f"\n[INFO] 모드: {LABELS[args.mode]}"
+      + (f"  시나리오: {args.scenario}" if args.scenario else "")
+      + f"  seed: {args.seed}")
+print("[INFO] SUMO GUI가 열립니다. ▶ 버튼으로 시작하세요. (Delay 슬라이더로 속도 조절)\n")
 
 env = sumo_rl.SumoEnvironment(
-    net_file=args.net, route_file=args.route, use_gui=True,
+    net_file=args.net, route_file=route_file, use_gui=True,
     num_seconds=args.duration, min_green=MIN_GREEN, max_green=MAX_GREEN,
-    single_agent=True,
+    single_agent=True, sumo_seed=args.seed, time_to_teleport=args.teleport,
 )
+
+# Webster: env 결정 주기에 맞춘 phase 스케줄 1회 계산
+webster_sched = None
+if args.mode == "webster":
+    webster_sched, t = webster_schedule(
+        demand, delta_time=getattr(env, "delta_time", 5),
+        min_green=MIN_GREEN, max_green=MAX_GREEN)
+    print(f"[INFO] Webster green(초): {t['green']}  cycle: {t['cycle']:.0f}s")
 
 obs, _ = env.reset()
 total_reward = 0.0
 done = False
 step = 0
+waits = []
 
 while not done:
     cur_phase = int(np.array(obs[:num_green_phases]).argmax())
     if args.mode == "fixed":
         env_action = (step // args.fixed_hold) % num_green_phases  # 사이클 고정
+    elif args.mode == "webster":
+        env_action = webster_sched[step % len(webster_sched)]
     else:
         with torch.no_grad():
             q = policy_net(torch.FloatTensor(np.array(obs, dtype=np.float32)).to(device))
             dqn_action = int(q.argmax().item())  # 0=keep, 1=next
         env_action = cur_phase if dqn_action == 0 else (cur_phase + 1) % num_green_phases
 
-    obs, reward, terminated, truncated, _ = env.step(env_action)
+    obs, reward, terminated, truncated, info = env.step(env_action)
     done = terminated or truncated
     total_reward += reward
     step += 1
+    if isinstance(info, dict) and info.get('system_total_waiting_time') is not None:
+        waits.append(info['system_total_waiting_time'])
     if args.delay > 0:
         time.sleep(args.delay)
     if step % 100 == 0:
         print(f"  Step {step:4d} | phase {cur_phase} | Reward {reward:7.3f} | Total {total_reward:8.1f}")
 
 env.close()
-print(f"\n{'='*45}")
-print(f"  모드     : {'SmartSignal(RL)' if args.mode == 'rl' else '고정신호'}")
-print(f"  총 스텝  : {step}")
-print(f"  총 보상  : {total_reward:.2f}")
-print(f"{'='*45}")
+avg_wait = float(np.mean(waits)) if waits else 0.0
+print(f"\n{'='*48}")
+print(f"  모드        : {LABELS[args.mode]}")
+print(f"  시나리오    : {args.scenario or route_file}  (seed {args.seed})")
+print(f"  총 스텝     : {step}")
+print(f"  평균 대기시간: {avg_wait:.1f}   (낮을수록 좋음 — 보고서 인용용)")
+print(f"  총 보상     : {total_reward:.2f}")
+print(f"{'='*48}")
