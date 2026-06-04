@@ -110,7 +110,7 @@
   - [x] `evaluate.py`를 SmartSignal(29D, Keep/Next) + 고정신호 사이클 baseline으로 일반화
   - [x] **시나리오 5종 루프 + 페어드 seed**(Fixed/RL 동일 트래픽) → mean±std + 개선율 (M1 ✅)
   - [x] `baselines.py`: Webster(수요 기반 최적 고정주기) 추가 + 3자(Fixed/Webster/SmartSignal) 평가 (M2 ✅)
-  - [ ] throughput(도착차량) 메트릭 추가 — TraCI 필요 (M3 으로 이월)
+  - [x] throughput(도착차량) 메트릭 추가 — TraCI `getArrivedNumber` 매 시뮬스텝 누적, 표·차트에 "높을수록 좋음" 방향으로 반영 (M3 ✅)
 - **산출물**: `evaluate.py`, `baselines.py`, `results/evaluation.csv`(120행: 5종×8ep×3모드), `results/evaluation_by_scenario.png`
 
 > **M2 결과 (8ep 평균 대기시간, Fixed 대비 개선율)** — 5종 전부 Webster·SmartSignal이 Fixed 능가:

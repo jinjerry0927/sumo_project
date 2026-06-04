@@ -38,14 +38,21 @@ x = np.arange(len(scen))
 n = len(modes)
 width = 0.8 / n
 
-fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+# 패널 구성: throughput 은 CSV에 있을 때만(구 CSV 호환) 추가
+panels = [('avg_waiting_time', 'Avg Waiting Time (lower better)'),
+          ('avg_queue', 'Avg Queue Length (lower better)')]
+if rows and 'throughput' in rows[0]:
+    panels.append(('throughput', 'Throughput (higher better)'))
+
+fig, axes = plt.subplots(1, len(panels), figsize=(7.5 * len(panels), 6))
+if len(panels) == 1:
+    axes = [axes]
 fig.patch.set_facecolor('#0D1B2A')
 title_modes = ' vs '.join(STYLE.get(m, ('', m))[1] for m in modes)
 fig.suptitle(f'{title_modes} — Per-Scenario Comparison',
              color='white', fontsize=15, fontweight='bold')
 
-for ax, (key, title) in zip(axes, [('avg_waiting_time', 'Avg Waiting Time (lower better)'),
-                                    ('avg_queue', 'Avg Queue Length (lower better)')]):
+for ax, (key, title) in zip(axes, panels):
     ax.set_facecolor('#0D1B2A')
     for i, m in enumerate(modes):
         means = [agg(s, m, key)[0] for s in scen]

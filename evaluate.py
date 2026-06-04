@@ -14,7 +14,8 @@ teleport: sumo_rl 기본은 교착차량 순간이동 off(-1) → 빡빡한 고�
 영구 교착시키는 시뮬 아티팩트가 생김. SUMO 기본값(300s)을 복원해 세 모드 동일 조건에서
 교착을 해소한다(run_episode 참고).
 
-⚠️ TODO (차터 M2): throughput(도착차량) 메트릭은 M3 으로 이월.
+메트릭: avg_waiting_time / avg_queue / max_queue(낮을수록 좋음) +
+throughput(도착차량 수, 높을수록 좋음 — TraCI getArrivedNumber 누적, M3 추가).
 실행:
     python evaluate.py                 # 기본: 시나리오당 10ep
     python evaluate.py --episodes 30   # 통계 강화
@@ -127,6 +128,17 @@ def run_episode(mode, route_file, seed, demand=None):
         additional_sumo_cmd="--no-step-log",   # 콘솔의 'Step #...' 스팸 억제
     )
     obs, _ = env.reset()
+    # throughput(도착차량 누적): env.step 은 내부에서 simulationStep 을 delta_time(황색 포함)
+    # 만큼 여러 번 돌리므로, env.step 뒤 getArrivedNumber()를 1회만 읽으면 대부분의 도착을
+    # 놓친다. _sumo_step 을 감싸 매 시뮬레이션 스텝의 도착수를 누적한다(reset 이후 부착).
+    arrived = [0]
+    _orig_sumo_step = env._sumo_step
+
+    def _counting_sumo_step():
+        _orig_sumo_step()
+        arrived[0] += env.sumo.simulation.getArrivedNumber()
+
+    env._sumo_step = _counting_sumo_step
     # Webster: env 의 결정 주기(delta_time)에 맞춘 phase 스케줄 1회 계산
     webster_sched = None
     if mode == "webster":
@@ -161,6 +173,7 @@ def run_episode(mode, route_file, seed, demand=None):
         'avg_waiting_time': float(np.mean(waits)) if waits else 0.0,
         'avg_queue': float(np.mean(queues)) if queues else 0.0,
         'max_queue': float(max(queues)) if queues else 0.0,
+        'throughput': int(arrived[0]),   # 에피소드 동안 목적지 도착한 차량 수 (높을수록 좋음)
     }
 
 
@@ -228,15 +241,19 @@ for m in other_modes:
     hdr += f" {LABELS[m] + ' (개선)':>{colw}s}"
 print(hdr)
 print("=" * header_w)
+# (key, 표시명, 방향): 'lower'=낮을수록 좋음, 'higher'=높을수록 좋음(throughput)
+TABLE_METRICS = [('avg_waiting_time', 'Avg Wait', 'lower'),
+                 ('avg_queue', 'Avg Queue', 'lower'),
+                 ('max_queue', 'Max Queue', 'lower'),
+                 ('throughput', 'Throughput', 'higher')]
 for name in EVAL_SCENARIOS:
-    for key, label in [('avg_waiting_time', 'Avg Wait'),
-                       ('avg_queue', 'Avg Queue'),
-                       ('max_queue', 'Max Queue')]:
+    for key, label, direction in TABLE_METRICS:
         fm, fs = agg(name, 'fixed', key)
         row = f"{name:12s} {label:12s} {fm:9.2f}±{fs:5.2f}"
         for m in other_modes:
             mm, ms = agg(name, m, key)
-            imp = (fm - mm) / max(fm, 1e-9) * 100
+            # 개선율: lower 메트릭은 (fixed-mode), higher(throughput)는 (mode-fixed)
+            imp = ((fm - mm) if direction == 'lower' else (mm - fm)) / max(fm, 1e-9) * 100
             row += f" {mm:9.2f}±{ms:5.2f}({imp:+5.1f}%)"
         print(row)
     print("-" * header_w)
@@ -255,14 +272,15 @@ scen = list(EVAL_SCENARIOS.keys())
 x = np.arange(len(scen))
 n = len(MODES)
 width = 0.8 / n
-fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+fig, axes = plt.subplots(1, 3, figsize=(21, 6))
 fig.patch.set_facecolor('#0D1B2A')
 title_modes = ' vs '.join(STYLE.get(m, ('', m))[1] for m in MODES)
 fig.suptitle(f'{title_modes} — Per-Scenario Comparison', color='white',
              fontsize=15, fontweight='bold')
 
 for ax, (key, title) in zip(axes, [('avg_waiting_time', 'Avg Waiting Time (lower better)'),
-                                    ('avg_queue', 'Avg Queue Length (lower better)')]):
+                                    ('avg_queue', 'Avg Queue Length (lower better)'),
+                                    ('throughput', 'Throughput (higher better)')]):
     ax.set_facecolor('#0D1B2A')
     for i, m in enumerate(MODES):
         means = [agg(s, m, key)[0] for s in scen]

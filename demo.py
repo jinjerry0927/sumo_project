@@ -7,13 +7,21 @@ evaluate.py 와 동일한 조건으로 돌아간다(공정·재현):
 - teleport=300 (교차로 영구 교착 방지, 평가와 동일)
 - 제어 규약: state 29차원, DQN 0=Keep/1=Next, 안전 min_green 15s / max_green 60s
 
-시연영상 추천 흐름 (같은 트래픽에서 대조):
-    python demo.py --mode fixed   --scenario asymmetric --seed 1000   # 고정신호 → 주축 막힘
-    python demo.py --mode rl      --scenario asymmetric --seed 1000   # SmartSignal → 잘 흐름
-    python demo.py --mode webster --scenario asymmetric --seed 1000   # (선택) 최적 고정신호
+━━ 시연영상 촬영 (3개를 똑같은 조건으로 찍어 비교) ━━
+같은 --scenario·--seed 면 셋 다 완전히 같은 트래픽을 받고, 카메라 화면(줌·중심)도
+자동으로 동일하게 고정되므로(--zoom), 영상에서 신호 전략 차이만 곧바로 대조된다.
 
-GUI 팁: 창이 열리면 상단 ▶ 로 시작. 'Delay (ms)' 칸에 50~100 입력하면 사람이 보기 좋은 속도.
-짧게 찍으려면 --duration 600 (10분 시뮬) 정도면 충분히 대조가 보임.
+    python demo.py --mode fixed   --scenario asymmetric   # ① 고정신호(균등) → 주축 막힘
+    python demo.py --mode webster --scenario asymmetric   # ② Webster(최적고정)
+    python demo.py --mode rl      --scenario asymmetric   # ③ SmartSignal(RL) → 잘 흐름
+
+(--seed 기본 1000. 셋 다 같은 값이면 같은 트래픽. 다른 시나리오는 --scenario high/saturated/...)
+
+GUI 팁:
+  - 창이 열리면 --start 로 자동 재생된다(바로 녹화 시작 가능).
+  - 너무 빠르면 상단 'Delay (ms)' 칸에 50~100 입력 → 사람이 보기 좋은 속도.
+  - 셋 다 같은 화면비로 녹화하려면 창 크기를 동일하게 두고 찍는다.
+  - 짧게 찍으려면 --duration 900 (15분 시뮬) 정도면 대조가 충분히 보인다.
 """
 import os
 import sys
@@ -57,6 +65,8 @@ parser.add_argument("--teleport",   type=int, default=300,
                     help="교착차량 순간이동 임계(초). -1=끔(고정신호 영구교착 연출용)")
 parser.add_argument("--fixed_hold", type=int, default=6,
                     help="고정신호: 각 green phase 유지 결정스텝 수")
+parser.add_argument("--zoom",       type=float, default=600.0,
+                    help="GUI 줌 레벨(클수록 확대). 3개 모드 동일값 → 같은 화면으로 대조. 0=자동맞춤")
 args = parser.parse_args()
 
 MIN_GREEN, MAX_GREEN = 15, 60
@@ -121,6 +131,7 @@ env = sumo_rl.SumoEnvironment(
     net_file=args.net, route_file=route_file, use_gui=True,
     num_seconds=args.duration, min_green=MIN_GREEN, max_green=MAX_GREEN,
     single_agent=True, sumo_seed=args.seed, time_to_teleport=args.teleport,
+    additional_sumo_cmd="--no-step-log",   # VSCode 터미널의 'Step #...' 스팸 억제
 )
 
 # Webster: env 결정 주기에 맞춘 phase 스케줄 1회 계산
@@ -132,6 +143,21 @@ if args.mode == "webster":
     print(f"[INFO] Webster green(초): {t['green']}  cycle: {t['cycle']:.0f}s")
 
 obs, _ = env.reset()
+
+# ── 카메라 화면 고정 ──
+# 3개 모드(fixed/webster/rl)를 같은 줌·중심으로 비춰야 영상 대조가 공정하다.
+# --zoom 동일값으로 셋을 찍으면 화면이 완전히 일치한다(0 이면 네트워크 전체 자동맞춤).
+try:
+    _view = "View #0"
+    (xmin, ymin), (xmax, ymax) = env.sumo.simulation.getNetBoundary()
+    if args.zoom and args.zoom > 0:
+        env.sumo.gui.setOffset(_view, (xmin + xmax) / 2, (ymin + ymax) / 2)
+        env.sumo.gui.setZoom(_view, args.zoom)
+    else:
+        env.sumo.gui.setBoundary(_view, xmin, ymin, xmax, ymax)
+except Exception as e:
+    print(f"[WARN] GUI 뷰 고정 실패(무시하고 진행): {e}")
+
 total_reward = 0.0
 done = False
 step = 0
@@ -166,6 +192,6 @@ print(f"\n{'='*48}")
 print(f"  모드        : {LABELS[args.mode]}")
 print(f"  시나리오    : {args.scenario or route_file}  (seed {args.seed})")
 print(f"  총 스텝     : {step}")
-print(f"  평균 대기시간: {avg_wait:.1f}   (낮을수록 좋음 — 보고서 인용용)")
+print(f"  평균 대기시간: {avg_wait:.1f}   (낮을수록 좋음 - 보고서 인용용)")
 print(f"  총 보상     : {total_reward:.2f}")
 print(f"{'='*48}")
