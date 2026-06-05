@@ -60,6 +60,8 @@ network/intersection.rou.xml
 
 # 학습 중 임시 로그
 *.tmp.log
+# 평가/학습 실행 콘솔 로그 (재생성 가능, 추적 불필요)
+results/_*.log
 
 # 결과 백업
 results_*.bak/
