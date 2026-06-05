@@ -61,6 +61,8 @@ parser.add_argument("--traffic_min", type=int, default=300,
                     help="각 방향 최소 vehsPerHour (한산)")
 parser.add_argument("--traffic_max", type=int, default=1200,
                     help="각 방향 최대 vehsPerHour (피크)")
+parser.add_argument("--obs", choices=["global", "e2"], default="global",
+                    help="global: sumo_rl 기본(전지적) / e2: E2 검지기 기반")
 args = parser.parse_args()
 
 set_sumo_home(args.sumo_home)
@@ -68,6 +70,16 @@ os.makedirs(args.out_dir, exist_ok=True)
 
 import sumo_rl
 from scenarios import random_demand, write_routes   # 트래픽 생성은 scenarios.py 공용 정의 사용
+
+# ── 관측 소스 선택 (global=sumo_rl 기본 / e2=E2 검지기 기반) ──
+ENV_KWARGS = {}
+MODEL_NAME = "smart_signal.pth"
+if args.obs == "e2":
+    from e2_observation import E2ObservationFunction
+    ENV_KWARGS = dict(observation_class=E2ObservationFunction,
+                      additional_sumo_cmd="-a network/e2.add.xml")
+    MODEL_NAME = "smart_signal_e2.pth"
+print(f"[INFO] 관측 모드: {args.obs} → 모델 파일 {MODEL_NAME}")
 
 
 # ── 안전 제약 (현실 도로 기준) ─────────────────────
@@ -113,6 +125,7 @@ probe_env = sumo_rl.SumoEnvironment(
     min_green=MIN_GREEN,
     max_green=MAX_GREEN,
     single_agent=True,
+    **ENV_KWARGS,
 )
 probe_obs, _ = probe_env.reset()
 STATE_SIZE = int(np.array(probe_obs).shape[0])
@@ -240,6 +253,7 @@ for episode in range(start_episode, args.episodes + 1):
         min_green=MIN_GREEN,
         max_green=MAX_GREEN,
         single_agent=True,
+        **ENV_KWARGS,
     )
     obs, _ = env.reset()
     total_reward = 0.0
@@ -293,7 +307,7 @@ for episode in range(start_episode, args.episodes + 1):
     csv_file.flush()
 
     if episode % CHECKPOINT_EVERY == 0:
-        ckpt_path = os.path.join(args.out_dir, f"checkpoint_ep{episode}.pth")
+        ckpt_path = os.path.join(args.out_dir, f"checkpoint_{args.obs}_ep{episode}.pth")
         torch.save({
             "episode":         episode,
             "epsilon":         epsilon,
@@ -308,7 +322,7 @@ for episode in range(start_episode, args.episodes + 1):
 
 
 csv_file.close()
-final_path = os.path.join(args.out_dir, "smart_signal.pth")
+final_path = os.path.join(args.out_dir, MODEL_NAME)
 torch.save({
     "policy_net":       policy_net.state_dict(),
     "state_size":       STATE_SIZE,
