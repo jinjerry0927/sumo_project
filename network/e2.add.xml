@@ -1,0 +1,14 @@
+<additional>
+    <laneAreaDetector id="e2_E2C_0" lane="E2C_0" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_E2C_1" lane="E2C_1" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_E2C_2" lane="E2C_2" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_N2C_0" lane="N2C_0" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_N2C_1" lane="N2C_1" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_N2C_2" lane="N2C_2" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_S2C_0" lane="S2C_0" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_S2C_1" lane="S2C_1" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_S2C_2" lane="S2C_2" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_W2C_0" lane="W2C_0" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_W2C_1" lane="W2C_1" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+    <laneAreaDetector id="e2_W2C_2" lane="W2C_2" pos="36.40" length="150.00" freq="100000" file="e2_detectors_output.xml"/>
+</additional>

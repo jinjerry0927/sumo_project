@@ -81,3 +81,8 @@ results.bak/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# E2 검지기 출력(재생성 가능)
+e2_detectors_output.xml
+# E2 모니터 출력(재생성 가능)
+results/e2_monitor*.csv
