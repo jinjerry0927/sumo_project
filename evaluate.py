@@ -75,32 +75,31 @@ class DQN(nn.Module):
         return self.net(x)
 
 
-# ── 모델 로드 (없으면 Fixed-only) ──
-policy_net = None
-NUM_GREEN_PHASES = 4
-if os.path.isfile(args.model):
-    ckpt = torch.load(args.model, map_location=device)
-    if isinstance(ckpt, dict) and "policy_net" in ckpt:
-        state_size = ckpt.get("state_size", 29)
-        action_size = ckpt.get("action_size", 2)
-        NUM_GREEN_PHASES = ckpt.get("num_green_phases", 4)
-        weights = ckpt["policy_net"]
-    else:
-        weights = ckpt
-        state_size = weights["net.0.weight"].shape[1]
-        action_size = weights[max(k for k in weights if k.endswith(".weight"))].shape[0]
-    policy_net = DQN(state_size, action_size).to(device)
-    policy_net.load_state_dict(weights)
-    policy_net.eval()
-    MODES = ["fixed", "webster", "rl"]
-    print(f"[INFO] 모델 로드: {args.model} "
-          f"(state={state_size}, action={action_size}, green_phases={NUM_GREEN_PHASES})")
-else:
-    MODES = ["fixed", "webster"]
-    print(f"[WARN] 모델 없음({args.model}) → Fixed/Webster 만 평가 (SmartSignal 제외).")
-    print("       SmartSignal 비교는 'python smart_signal.py' 학습 후 다시 실행하세요.")
+# ── 모델 로드 (global / e2 각각, 있으면 모드 추가) ──
+def _load_dqn(path):
+    if not os.path.isfile(path):
+        return None, None
+    ckpt = torch.load(path, map_location=device)
+    weights = ckpt["policy_net"] if isinstance(ckpt, dict) and "policy_net" in ckpt else ckpt
+    ss = ckpt.get("state_size", weights["net.0.weight"].shape[1]) if isinstance(ckpt, dict) else weights["net.0.weight"].shape[1]
+    a_s = ckpt.get("action_size", weights[max(k for k in weights if k.endswith(".weight"))].shape[0]) if isinstance(ckpt, dict) else weights[max(k for k in weights if k.endswith(".weight"))].shape[0]
+    ng = ckpt.get("num_green_phases", 4) if isinstance(ckpt, dict) else 4
+    net = DQN(ss, a_s).to(device); net.load_state_dict(weights); net.eval()
+    return net, ng
 
-LABELS = {"fixed": "Fixed", "webster": "Webster", "rl": "SmartSignal"}
+NETS = {}
+net_g, ng_g = _load_dqn("results/smart_signal.pth")
+if net_g is not None:
+    NETS["rl_global"] = net_g
+net_e, ng_e = _load_dqn("results/smart_signal_e2.pth")
+if net_e is not None:
+    NETS["rl_e2"] = net_e
+NUM_GREEN_PHASES = ng_g or ng_e or 4
+MODES = ["fixed", "webster"] + list(NETS.keys())
+print(f"[INFO] 평가 모드: {MODES}")
+
+LABELS = {"fixed": "Fixed", "webster": "Webster",
+          "rl_global": "SmartSignal(god-view)", "rl_e2": "SmartSignal(E2)"}
 
 # ── 시나리오 파일 확보 (없으면 자동 생성) ──
 scenario_paths = {}
@@ -116,7 +115,14 @@ def run_episode(mode, route_file, seed, demand=None):
     """한 에피소드 실행 → 메트릭 dict.
 
     mode == 'webster' 인 경우 demand(방향별 veh/h)로 green split 스케줄을 계산해 순환한다.
+    mode == 'rl_e2' 인 경우 E2 검지기 관측(53D)을 사용한다.
     """
+    extra = "--no-step-log"
+    obs_class = None
+    if mode == "rl_e2":
+        from e2_observation import E2ObservationFunction
+        obs_class = E2ObservationFunction
+        extra = "-a network/e2.add.xml --no-step-log"
     env = sumo_rl.SumoEnvironment(
         net_file=args.net, route_file=route_file, use_gui=False,
         num_seconds=args.seconds, min_green=MIN_GREEN, max_green=MAX_GREEN,
@@ -125,7 +131,8 @@ def run_episode(mode, route_file, seed, demand=None):
         # 영구 교착(흡수상태)되는 시뮬 아티팩트 발생. SUMO 기본값(300s)을 복원해
         # 세 제어기 동일 조건에서 교착을 해소(공정). 자세한 진단은 커밋 메시지 참고.
         time_to_teleport=300,
-        additional_sumo_cmd="--no-step-log",   # 콘솔의 'Step #...' 스팸 억제
+        additional_sumo_cmd=extra,   # 콘솔의 'Step #...' 스팸 억제 (+E2면 검지기 add)
+        **({"observation_class": obs_class} if obs_class else {}),
     )
     obs, _ = env.reset()
     # throughput(도착차량 누적): env.step 은 내부에서 simulationStep 을 delta_time(황색 포함)
@@ -153,9 +160,10 @@ def run_episode(mode, route_file, seed, demand=None):
             action = (step // args.fixed_hold) % NUM_GREEN_PHASES
         elif mode == "webster":
             action = webster_sched[step % len(webster_sched)]
-        else:
+        else:  # rl_global / rl_e2
+            net = NETS[mode]
             with torch.no_grad():
-                q = policy_net(torch.FloatTensor(np.array(obs, dtype=np.float32)).to(device))
+                q = net(torch.FloatTensor(np.array(obs, dtype=np.float32)).to(device))
                 dqn_action = int(q.argmax().item())
             action = cur_phase if dqn_action == 0 else (cur_phase + 1) % NUM_GREEN_PHASES
         obs, reward, terminated, truncated, info = env.step(action)
@@ -179,7 +187,7 @@ def run_episode(mode, route_file, seed, demand=None):
 
 # ── CSV 저장 헬퍼 (시나리오마다 호출 → 중간 끊겨도 완료분 보존) ──
 os.makedirs("results", exist_ok=True)
-OUT_CSV = "results/evaluation.csv"
+OUT_CSV = "results/evaluation_e2.csv"
 
 
 def flush_csv(recs):
@@ -267,7 +275,8 @@ print(f"[INFO] CSV 저장: {OUT_CSV}")
 # ── 차트 (시나리오별 그룹 막대, N개 모드 일반화) ──
 STYLE = {'fixed': ('#546E7A', 'Fixed'),
          'webster': ('#8E7CC3', 'Webster'),
-         'rl': ('#00897B', 'SmartSignal')}
+         'rl_global': ('#00897B', 'SmartSignal(god-view)'),
+         'rl_e2': ('#FF7043', 'SmartSignal(E2)')}
 scen = list(EVAL_SCENARIOS.keys())
 x = np.arange(len(scen))
 n = len(MODES)
@@ -298,6 +307,6 @@ for ax, (key, title) in zip(axes, [('avg_waiting_time', 'Avg Waiting Time (lower
     ax.legend(facecolor='#1a2d40', labelcolor='white')
 
 plt.tight_layout()
-out_png = "results/evaluation_by_scenario.png"
+out_png = "results/evaluation_e2_by_scenario.png"
 plt.savefig(out_png, dpi=150, bbox_inches='tight', facecolor='#0D1B2A')
 print(f"[INFO] 그래프 저장: {out_png}")
