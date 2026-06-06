@@ -67,6 +67,9 @@ parser.add_argument("--fixed_hold", type=int, default=6,
                     help="고정신호: 각 green phase 유지 결정스텝 수")
 parser.add_argument("--zoom",       type=float, default=600.0,
                     help="GUI 줌 레벨(클수록 확대). 3개 모드 동일값 → 같은 화면으로 대조. 0=자동맞춤")
+parser.add_argument("--hil", action="store_true", help="엣지서버(소켓)로 추론 위임")
+parser.add_argument("--host", default="127.0.0.1")
+parser.add_argument("--port", type=int, default=9999)
 args = parser.parse_args()
 
 MIN_GREEN, MAX_GREEN = 15, 60
@@ -100,10 +103,34 @@ class DQN(nn.Module):
         return self.net(x)
 
 
-# ── RL 모드: 체크포인트에서 차원 자동 인식 ──
+# ── HIL: 엣지서버(라즈베리파이)에 추론을 위임하는 소켓 클라이언트 ──
+import socket
+import json
+
+
+class EdgeClient:
+    def __init__(self, host, port):
+        self.sock = socket.create_connection((host, port), timeout=5)
+        self.f = self.sock.makefile("rwb")
+        print(f"[hil] 엣지서버 연결: {host}:{port}")
+
+    def act(self, obs):
+        self.f.write((json.dumps({"obs": list(map(float, obs))}) + "\n").encode())
+        self.f.flush()
+        return int(json.loads(self.f.readline().decode())["action"])
+
+    def close(self):
+        try:
+            self.f.close()
+            self.sock.close()
+        except Exception:
+            pass
+
+
+# ── RL 모드: 체크포인트에서 차원 자동 인식 (HIL 이면 추론은 엣지가 하므로 로컬 로드 생략) ──
 policy_net = None
 num_green_phases = 4
-if args.mode == "rl":
+if args.mode == "rl" and not args.hil:
     ckpt = torch.load(args.model, map_location=device)
     if isinstance(ckpt, dict) and "policy_net" in ckpt:
         state_size = ckpt.get("state_size", 29)
@@ -127,11 +154,20 @@ print(f"\n[INFO] 모드: {LABELS[args.mode]}"
       + f"  seed: {args.seed}")
 print("[INFO] SUMO GUI가 열립니다. ▶ 버튼으로 시작하세요. (Delay 슬라이더로 속도 조절)\n")
 
+# ── HIL: E2 모델 기준이므로 데모도 E2 검지기 관측으로 띄운다 ──
+ENV_KWARGS = {}
+extra_cmd = "--no-step-log"   # VSCode 터미널의 'Step #...' 스팸 억제
+if args.hil:
+    from e2_observation import E2ObservationFunction
+    ENV_KWARGS = dict(observation_class=E2ObservationFunction)
+    extra_cmd = "-a network/e2.add.xml --no-step-log"
+
 env = sumo_rl.SumoEnvironment(
     net_file=args.net, route_file=route_file, use_gui=True,
     num_seconds=args.duration, min_green=MIN_GREEN, max_green=MAX_GREEN,
     single_agent=True, sumo_seed=args.seed, time_to_teleport=args.teleport,
-    additional_sumo_cmd="--no-step-log",   # VSCode 터미널의 'Step #...' 스팸 억제
+    additional_sumo_cmd=extra_cmd,
+    **ENV_KWARGS,
 )
 
 # Webster: env 결정 주기에 맞춘 phase 스케줄 1회 계산
@@ -162,6 +198,7 @@ total_reward = 0.0
 done = False
 step = 0
 waits = []
+edge = EdgeClient(args.host, args.port) if args.hil else None
 
 while not done:
     cur_phase = int(np.array(obs[:num_green_phases]).argmax())
@@ -170,9 +207,12 @@ while not done:
     elif args.mode == "webster":
         env_action = webster_sched[step % len(webster_sched)]
     else:
-        with torch.no_grad():
-            q = policy_net(torch.FloatTensor(np.array(obs, dtype=np.float32)).to(device))
-            dqn_action = int(q.argmax().item())  # 0=keep, 1=next
+        if edge is not None:
+            dqn_action = edge.act(obs)  # 엣지서버(소켓) 추론
+        else:
+            with torch.no_grad():
+                q = policy_net(torch.FloatTensor(np.array(obs, dtype=np.float32)).to(device))
+                dqn_action = int(q.argmax().item())  # 0=keep, 1=next
         env_action = cur_phase if dqn_action == 0 else (cur_phase + 1) % num_green_phases
 
     obs, reward, terminated, truncated, info = env.step(env_action)
@@ -187,6 +227,8 @@ while not done:
         print(f"  Step {step:4d} | phase {cur_phase} | Reward {reward:7.3f} | Total {total_reward:8.1f}")
 
 env.close()
+if edge:
+    edge.close()
 avg_wait = float(np.mean(waits)) if waits else 0.0
 print(f"\n{'='*48}")
 print(f"  모드        : {LABELS[args.mode]}")
