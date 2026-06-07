@@ -104,6 +104,21 @@ python demo.py --hil --dashboard --host <IP> --scenario asymmetric --duration 60
 
 ---
 
+## 2-B. 안전 종료 (전원 뽑기 전 필수)
+
+전원을 그냥 뽑으면 SD카드가 손상될 수 있다. **반드시 graceful shutdown 후** 뽑는다.
+
+```bash
+# 창 A(SSH)에서
+pkill -f edge_server.py     # (선택) 엣지서버 정리
+sudo shutdown -h now        # 안전 종료 (= sudo poweroff)
+```
+- 실행하면 SSH가 끊긴다 → `Connection closed by remote host` 는 **정상**.
+- Pi의 **초록 활동 LED 깜빡임이 멈출 때까지**(보통 5~15초) 기다린 뒤 **USB-C 전원 뽑기** → 마지막에 핫스팟 끄기.
+- ❌ 활동 LED 깜빡이는 중에 전원 뽑기 = SD카드 손상 위험.
+
+---
+
 ## 3. 상세 단계
 
 ### A. 핫스팟 + 부팅
