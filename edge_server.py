@@ -7,12 +7,15 @@ def load(path):
     d = np.load(path)
     return (d["W0"], d["b0"]), (d["W2"], d["b2"]), (d["W4"], d["b4"])
 
-def infer(layers, x):
+def forward(layers, x):
     (W0,b0),(W2,b2),(W4,b4) = layers
     x = np.asarray(x, dtype=np.float32)
     h = np.maximum(0, W0 @ x + b0)
     h = np.maximum(0, W2 @ h + b2)
-    return int(np.argmax(W4 @ h + b4))
+    return W4 @ h + b4   # logits, shape (action_size,)
+
+def infer(layers, x):
+    return int(np.argmax(forward(layers, x)))
 
 def main():
     ap = argparse.ArgumentParser()
@@ -30,8 +33,9 @@ def main():
         with conn, conn.makefile("rwb") as f:
             for line in f:
                 try:
-                    act = infer(layers, json.loads(line.decode())["obs"])
-                    f.write((json.dumps({"action": act})+"\n").encode()); f.flush()
+                    q = forward(layers, json.loads(line.decode())["obs"])
+                    resp = {"action": int(np.argmax(q)), "q": [float(v) for v in q]}
+                    f.write((json.dumps(resp)+"\n").encode()); f.flush()
                 except Exception as e:
                     f.write((json.dumps({"error": str(e)})+"\n").encode()); f.flush()
 

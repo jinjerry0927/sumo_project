@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>실시간 HIL 대시보드</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#070b10; color:#cdd6e0; font-family:system-ui,sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:16px; }
+  h4 { margin:0 0 10px; font-size:12px; color:#7fd1c0; text-transform:uppercase; letter-spacing:1px; }
+  .D { background:#0b0f14; border:1px solid #2a3441; border-radius:10px; padding:16px; }
+  .strip { display:flex; justify-content:space-around; border-bottom:1px solid #2a3441; padding-bottom:12px; margin-bottom:14px; }
+  .m { text-align:center; } .m .v { font-size:32px; font-weight:800; color:#fff; line-height:1; }
+  .m .v.good { color:#2ecc71; } .m .d { font-size:11px; color:#8a97a8; margin-top:5px; }
+  .body { display:flex; gap:18px; }
+  .sens { flex:1; }
+  .grp { font-size:10px; color:#5b6675; margin:8px 0 3px; text-transform:uppercase; letter-spacing:.5px; }
+  .lane { display:flex; align-items:center; gap:8px; margin:3px 0; }
+  .lane .nm { width:78px; font-size:12px; color:#aeb9c7; }
+  .lane .tk { flex:1; height:14px; background:#161d28; border-radius:3px; overflow:hidden; }
+  .lane .bar { height:100%; border-radius:3px; transition:width .25s ease; }
+  .lane .n { width:26px; text-align:right; font-size:12px; font-weight:700; color:#fff; }
+  .lane.green .nm { color:#2ecc71; }
+  .grn { background:linear-gradient(90deg,#27ae60,#2ecc71); }
+  .ora { background:linear-gradient(90deg,#e67e22,#f39c12); }
+  .gry { background:#3a4654; }
+  .brain { flex:0 0 210px; background:#0e141c; border-radius:8px; padding:14px; text-align:center; }
+  .dec { font-size:36px; font-weight:900; letter-spacing:1px; margin:8px 0; }
+  .keep { color:#5dade2; } .switch { color:#f39c12; text-shadow:0 0 14px rgba(243,156,18,.6); }
+  .fixed { color:#8a97a8; font-size:22px; }
+  .sub { font-size:11px; color:#8a97a8; }
+  .qwrap { display:flex; gap:12px; justify-content:center; align-items:flex-end; height:70px; margin-top:16px; }
+  .qbar { width:48px; border-radius:4px 4px 0 0; display:flex; flex-direction:column; justify-content:flex-end;
+          align-items:center; color:#06121f; font-weight:700; font-size:11px; padding-bottom:2px; transition:height .25s; }
+  .qsel { background:#5dade2; } .qoff { background:#34495e; color:#cdd6e0; }
+  .qlbl { font-size:10px; color:#8a97a8; margin-top:5px; }
+  .leg { display:flex; gap:16px; align-items:center; margin-top:12px; font-size:11px; color:#8a97a8; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+  .off { opacity:.4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="D">
+    <div class="strip">
+      <div class="m"><div class="v" id="m-wait">–</div><div class="d">현재 대기차량</div></div>
+      <div class="m"><div class="v good" id="m-avg">–</div><div class="d">평균 대기(s)</div></div>
+      <div class="m"><div class="v" id="m-thru">–</div><div class="d">누적 통과</div></div>
+      <div class="m"><div class="v" id="m-phase">–</div><div class="d" id="m-phase-name">현재 현시</div></div>
+    </div>
+    <div class="body">
+      <div class="sens">
+        <h4>E2 검지기가 보는 것 — 차로별 대기차량(12차로)</h4>
+        <div id="lanes"></div>
+        <div class="sub" style="margin-top:10px">회색=우회전 · 초록=직진 · 주황=좌회전 · 숫자=정지 차량수 — <b>SUMO엔 안 보이는, 모델이 받는 입력</b></div>
+      </div>
+      <div class="brain">
+        <h4 style="color:#5dade2">SmartSignal 두뇌</h4>
+        <div class="dec keep" id="b-dec">–</div>
+        <div class="sub" id="b-sub">대기 중</div>
+        <div class="qwrap" id="qwrap" style="display:none">
+          <div class="qbar qsel" id="q0">–</div>
+          <div class="qbar qoff" id="q1">–</div>
+        </div>
+        <div class="qlbl" id="qlbl" style="display:none">Q값:  유지 / 전환</div>
+      </div>
+    </div>
+    <div class="leg">
+      <span><span class="dot" style="background:#2ecc71"></span>녹색현시</span>
+      <span><span class="dot" style="background:#f1c40f"></span>황색</span>
+      <span><span class="dot" style="background:#e74c3c"></span>적색</span>
+      <span id="edge" style="margin-left:auto">엣지: Raspberry Pi · numpy · 53D→128→128→2</span>
+    </div>
+  </div>
+</div>
+<script>
+const GROUP_CLASS = {"우회전":"gry", "직진":"grn", "좌회전":"ora"};
+function render(s) {
+  if (!s || !s.lanes) return;
+  document.getElementById("m-wait").textContent = s.metrics.waiting_vehicles;
+  document.getElementById("m-avg").textContent = s.metrics.avg_wait;
+  document.getElementById("m-thru").textContent = s.metrics.throughput;
+  document.getElementById("m-phase").textContent = "P" + s.phase;
+  document.getElementById("m-phase-name").textContent = s.phase_name;
+  // 차로 막대 (3개마다 = 한 방향 그룹 헤더)
+  const DIRS = ["북","남","동","서"];
+  let html = "";
+  s.lanes.forEach((ln, i) => {
+    if (i % 3 === 0) html += `<div class="grp">${DIRS[i/3]}</div>`;
+    const w = Math.min(100, Math.round(ln.count / ln.cap * 100));
+    html += `<div class="lane ${ln.is_green ? "green" : ""}">
+      <span class="nm">${ln.label}</span>
+      <div class="tk"><div class="bar ${GROUP_CLASS[ln.group]}" style="width:${w}%"></div></div>
+      <span class="n">${ln.count}</span></div>`;
+  });
+  document.getElementById("lanes").innerHTML = html;
+  // 두뇌
+  const dec = document.getElementById("b-dec");
+  if (s.decision === "keep") { dec.textContent = "● KEEP"; dec.className = "dec keep"; }
+  else if (s.decision === "switch") { dec.textContent = "▶ SWITCH"; dec.className = "dec switch"; }
+  else { dec.textContent = "고정주기"; dec.className = "dec fixed"; }
+  document.getElementById("b-sub").textContent = `현시 P${s.phase} · ${Math.round(s.time_in_phase)}s 경과`;
+  const qw = document.getElementById("qwrap"), ql = document.getElementById("qlbl");
+  if (s.q && s.q.length === 2) {
+    qw.style.display = "flex"; ql.style.display = "block";
+    const lo = Math.min(s.q[0], s.q[1]), hi = Math.max(s.q[0], s.q[1]), rng = (hi - lo) || 1e-6;
+    const sel = s.q[0] >= s.q[1] ? 0 : 1;
+    [0,1].forEach(k => {
+      const el = document.getElementById("q"+k);
+      el.style.height = (22 + 46 * (s.q[k] - lo) / rng) + "px";
+      el.textContent = s.q[k].toFixed(1);
+      el.className = "qbar " + (k === sel ? "qsel" : "qoff");
+    });
+  } else { qw.style.display = "none"; ql.style.display = "none"; }
+  if (s.edge) document.getElementById("edge").textContent =
+    `엣지: ${s.edge === "local" ? "로컬" : "Pi " + s.edge} · numpy · 53D→128→128→2`;
+}
+async function poll() {
+  try { const r = await fetch("/state"); render(await r.json()); } catch (e) {}
+}
+setInterval(poll, 200); poll();
+</script>
+</body>
+</html>

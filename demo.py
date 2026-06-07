@@ -70,6 +70,8 @@ parser.add_argument("--zoom",       type=float, default=600.0,
 parser.add_argument("--hil", action="store_true", help="엣지서버(소켓)로 추론 위임")
 parser.add_argument("--host", default="127.0.0.1")
 parser.add_argument("--port", type=int, default=9999)
+parser.add_argument("--dashboard", action="store_true", help="실시간 대시보드(웹) 동시 기동")
+parser.add_argument("--dash_port", type=int, default=8000, help="대시보드 포트")
 args = parser.parse_args()
 
 MIN_GREEN, MAX_GREEN = 15, 60
@@ -112,12 +114,15 @@ class EdgeClient:
     def __init__(self, host, port):
         self.sock = socket.create_connection((host, port), timeout=5)
         self.f = self.sock.makefile("rwb")
+        self.last_q = None
         print(f"[hil] 엣지서버 연결: {host}:{port}")
 
     def act(self, obs):
         self.f.write((json.dumps({"obs": list(map(float, obs))}) + "\n").encode())
         self.f.flush()
-        return int(json.loads(self.f.readline().decode())["action"])
+        resp = json.loads(self.f.readline().decode())
+        self.last_q = resp.get("q")
+        return int(resp["action"])
 
     def close(self):
         try:
@@ -161,6 +166,10 @@ if args.hil:
     from e2_observation import E2ObservationFunction
     ENV_KWARGS = dict(observation_class=E2ObservationFunction)
     extra_cmd = "-a network/e2.add.xml --no-step-log"
+elif args.dashboard:
+    # 대시보드는 차로별 차량수를 traci.lanearea 로 직접 읽으므로 검지기 로드만 필요.
+    # 관측 클래스는 기본 유지 → 로컬 rl 모델(smart_signal.pth) 차원과 일치.
+    extra_cmd = "-a network/e2.add.xml --no-step-log"
 
 env = sumo_rl.SumoEnvironment(
     net_file=args.net, route_file=route_file, use_gui=True,
@@ -200,6 +209,34 @@ step = 0
 waits = []
 edge = EdgeClient(args.host, args.port) if args.hil else None
 
+# ── 대시보드(웹) 기동 + 차로/현시 매핑 ──
+dash = None
+LANE_ORDER = LANE_LABELS = GROUP = PHASE_NAMES = PHASE_GREEN = cap_map = None
+arrived = 0
+dqn_action = None
+last_qvals = None
+if args.dashboard:
+    import webbrowser
+    from dashboard import Dashboard
+    DIRS = [("N", "북"), ("S", "남"), ("E", "동"), ("W", "서")]
+    SUB = [("0", "우회전"), ("1", "직진"), ("2", "좌회전")]
+    LANE_ORDER = [f"{d}2C_{i}" for d, _ in DIRS for i, _ in SUB]
+    LANE_LABELS = {f"{d}2C_{i}": f"{dk} {sk}" for d, dk in DIRS for i, sk in SUB}
+    GROUP = {f"{d}2C_{i}": sk for d, _ in DIRS for i, sk in SUB}
+    PHASE_NAMES = {0: "남북직진", 1: "남북좌회전", 2: "동서직진", 3: "동서좌회전"}
+    PHASE_GREEN = {0: {"S2C_1", "N2C_1"}, 1: {"S2C_2", "N2C_2"},
+                   2: {"E2C_1", "W2C_1"}, 3: {"E2C_2", "W2C_2"}}
+    VEH_LEN = 7.5
+    cap_map = {lane: max(env.sumo.lanearea.getLength("e2_" + lane) / VEH_LEN, 1.0)
+               for lane in LANE_ORDER}
+    dash = Dashboard()
+    url = dash.start(port=args.dash_port)
+    print(f"[dashboard] {url}  <- 브라우저에서 열기")
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
+
 while not done:
     cur_phase = int(np.array(obs[:num_green_phases]).argmax())
     if args.mode == "fixed":
@@ -208,14 +245,42 @@ while not done:
         env_action = webster_sched[step % len(webster_sched)]
     else:
         if edge is not None:
-            dqn_action = edge.act(obs)  # 엣지서버(소켓) 추론
+            dqn_action = edge.act(obs)          # 엣지서버(소켓) 추론
+            last_qvals = edge.last_q
         else:
             with torch.no_grad():
                 q = policy_net(torch.FloatTensor(np.array(obs, dtype=np.float32)).to(device))
-                dqn_action = int(q.argmax().item())  # 0=keep, 1=next
+                dqn_action = int(q.argmax().item())   # 0=keep, 1=next
+                last_qvals = q.detach().cpu().numpy().tolist()
         env_action = cur_phase if dqn_action == 0 else (cur_phase + 1) % num_green_phases
 
     obs, reward, terminated, truncated, info = env.step(env_action)
+    if args.dashboard:
+        arrived += env.sumo.simulation.getArrivedNumber()
+        la = env.sumo.lanearea
+        halting = {lane: int(la.getLastStepHaltingNumber("e2_" + lane)) for lane in LANE_ORDER}
+        disp_phase = int(np.array(obs[:num_green_phases]).argmax())
+        decision = ("keep" if dqn_action == 0 else "switch") if args.mode == "rl" else "fixed"
+        mean_wait = info.get("system_mean_waiting_time") if isinstance(info, dict) else None
+        dash.update({
+            "step": step,
+            "phase": disp_phase, "phase_name": PHASE_NAMES[disp_phase],
+            "time_in_phase": 0,
+            "decision": decision,
+            "q": last_qvals if args.mode == "rl" else None,
+            "metrics": {
+                "waiting_vehicles": sum(halting.values()),
+                "avg_wait": round(float(mean_wait), 1) if mean_wait is not None else 0.0,
+                "throughput": int(arrived),
+            },
+            "lanes": [{
+                "label": LANE_LABELS[lane], "group": GROUP[lane],
+                "count": halting[lane], "cap": int(cap_map[lane]),
+                "is_green": (lane in PHASE_GREEN[disp_phase]) or lane.endswith("_0"),
+            } for lane in LANE_ORDER],
+            "mode": args.mode,
+            "edge": f"{args.host}:{args.port}" if args.hil else "local",
+        })
     done = terminated or truncated
     total_reward += reward
     step += 1
@@ -229,6 +294,8 @@ while not done:
 env.close()
 if edge:
     edge.close()
+if dash:
+    dash.stop()
 avg_wait = float(np.mean(waits)) if waits else 0.0
 print(f"\n{'='*48}")
 print(f"  모드        : {LABELS[args.mode]}")

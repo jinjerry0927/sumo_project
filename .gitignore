@@ -86,3 +86,6 @@ desktop.ini
 e2_detectors_output.xml
 # E2 모니터 출력(재생성 가능)
 results/e2_monitor*.csv
+
+# 브레인스토밍 시각화 산출물(재생성 가능)
+.superpowers/
