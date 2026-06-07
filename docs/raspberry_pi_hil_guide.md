@@ -52,6 +52,58 @@
 
 ---
 
+## 2-A. 대시보드까지 같이 띄우기 (발표용 — 0~4단계 풀버전)
+
+> Pi로 시연하면서 노트북에 **실시간 대시보드**(E2 차로별 대기차량 + 두뇌 KEEP/SWITCH + Q값)도 같이 띄우는 전체 절차. **창 2개**를 열고 번갈아 작업한다. `<IP>`는 매번 바뀌니 그 자리에 실제 Pi IP를 넣는다.
+
+### 0. 준비 (창 열기 전)
+1. 폰 **핫스팟 켜기** → 데모 끝까지 끄지 말 것(끄면 IP 바뀜).
+2. **노트북**을 그 핫스팟에 연결(학교/집 WiFi 아님).
+3. Pi에 **USB-C 전원** 연결 → **1~2분** 부팅 대기.
+4. 폰 **"연결된 기기"** 목록에서 `raspberrypi` 의 IP 확인(예: `10.14.223.27`). → 이게 `<IP>`.
+
+### 1. 창 B (노트북) — 폴더 진입 + Pi에 최신 서버 복사
+PowerShell 새 창:
+```powershell
+cd C:\Users\jinuk\Documents\GitHub\sumo_project
+git pull
+scp edge_server.py jinjerry@<IP>:~/
+```
+- `git pull` → 최신 코드(대시보드/Q값 반영분) 확보.
+- `scp ...` → **Q값 막대 때문에** 새 edge_server.py를 Pi로 보냄(한 번만 하면 됨). 비밀번호는 화면에 안 보이는 게 정상.
+
+### 2. 창 A (Pi 접속) — SSH 후 엣지서버 기동
+PowerShell **다른** 새 창:
+```powershell
+ssh jinjerry@<IP>
+```
+`jinjerry@raspberrypi:~ $` 프롬프트가 뜨면 접속 성공. 이제 **Pi 안에서**:
+```bash
+sudo iw wlan0 set power_save off
+pkill -f edge_server.py
+nohup python3 -u edge_server.py --weights smart_signal_e2.npz > edge.log 2>&1 &
+ss -tln | grep 9999
+```
+- 마지막 줄에 `LISTEN ... 0.0.0.0:9999` 보이면 서버 OK. (확인: `cat edge.log` → `[edge] listening on 0.0.0.0:9999`)
+
+### 3. 창 B (노트북) — 대시보드 포함 데모 실행
+창 B로 돌아와서(이미 폴더 안):
+```powershell
+python demo.py --hil --dashboard --host <IP> --scenario asymmetric --duration 600
+```
+- ⚠️ 옵션은 전부 `--단어` 처럼 **붙여서**: `--hil`/`--dashboard`/`--host`/`--scenario`/`--duration` (`-- hil` 처럼 띄우면 에러).
+- ⚠️ `--host` 엔 **IP만**(`jinjerry@` 금지, `<>` 금지, `.local` 말고 숫자 IP).
+- `[hil] 엣지서버 연결: <IP>:9999` + `[dashboard] http://127.0.0.1:8000` 뜨면서 **SUMO GUI + 브라우저 대시보드**가 자동으로 열린다.
+
+### 4. 시연
+- SUMO 창에서 **▶ 재생**(또는 상단 Delay 50~100ms).
+- 브라우저 대시보드에서 12차로 막대·KEEP/SWITCH·**Q값 막대**가 실시간 갱신 → 하단 범례에 `엣지: Pi <IP> …` 표시(= Pi가 추론 중인 증거).
+- 시나리오 바꾸기: `--scenario low|medium|high|asymmetric|saturated`
+
+> 대시보드 없이 콘솔로만 볼 거면 `--dashboard` 만 빼면 된다(2번 빠른 시작과 동일).
+
+---
+
 ## 3. 상세 단계
 
 ### A. 핫스팟 + 부팅
@@ -155,7 +207,8 @@ vcgencmd get_throttled                           # 전원 상태(0x0=정상)
 # --- 노트북에서 (창 B) ---
 ssh jinjerry@<IP>                                                 # Pi 접속
 scp results/smart_signal_e2.npz edge_server.py jinjerry@<IP>:~/   # 파일 복사(최초)
-python demo.py --hil --host <IP> --scenario asymmetric --duration 600   # 데모
+python demo.py --hil --host <IP> --scenario asymmetric --duration 600              # 데모(콘솔만)
+python demo.py --hil --dashboard --host <IP> --scenario asymmetric --duration 600  # 데모(+실시간 대시보드)
 ```
 
 ---
