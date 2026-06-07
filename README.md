@@ -119,6 +119,19 @@ python demo.py --mode rl --duration 1800
 python demo.py --mode fixed --duration 1800
 ```
 
+### 라즈베리파이 HIL + 실시간 대시보드
+E2 검지기 관측(53D) 모델을 엣지(라즈베리파이/로컬)에서 numpy로 추론하고, SUMO GUI 옆에 실시간 대시보드(12차로 대기차량 + 두뇌 KEEP/SWITCH + Q값)를 함께 띄운다.
+```powershell
+# 로컬 점검(Pi 불필요): SUMO + 대시보드만 확인
+python demo.py --dashboard --mode rl --scenario asymmetric --duration 600
+
+# HIL(엣지 추론) — 터미널 A에서 엣지서버, 터미널 B에서 데모
+python edge_server.py --weights results/smart_signal_e2.npz          # 터미널 A
+python demo.py --hil --dashboard --host 127.0.0.1 --scenario asymmetric   # 터미널 B
+```
+- 대시보드는 브라우저 `http://127.0.0.1:8000` 에 자동으로 열린다(추가 의존성 없음, 파이썬 stdlib).
+- 실물 라즈베리파이 연동 절차 → `docs/raspberry_pi_hil_guide.md`, 대시보드 점검 가이드 → `docs/dashboard_guide.md`.
+
 ## 🛠️ 기술 스택
 
 | 영역 | 기술 |

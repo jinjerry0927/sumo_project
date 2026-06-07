@@ -135,8 +135,9 @@
 - **역할**: 그래프·GUI 데모·발표자료·문서. **결과를 설득력 있게 전달.**
 - **1학기 할일**
   - [x] `plot_results.py`(학습곡선)·`demo.py`(SmartSignal/fixed 토글) SmartSignal 규약으로 재작성 완료
-  - [ ] 발표용 시나리오별 비교 차트 (5 시나리오 × 핵심 메트릭)
-  - [ ] `README.md` / 보고서를 새 목표로 갱신, 발표 슬라이드 outline
+  - [x] 발표용 시나리오별 비교 차트 (5 시나리오 × 핵심 메트릭) → `results/evaluation_e2_by_scenario.png` + `docs/presentation_summary.md`(4자 핵심수치표·스토리컷)
+  - [x] **실시간 HIL 대시보드** — `demo.py --dashboard`: SUMO GUI 옆 웹 대시보드(12차로 대기차량 + 두뇌 KEEP/SWITCH·Q값 라이브). 엣지 Q값 프로토콜 확장, 실물 Pi 시연 검증. 가이드 `docs/dashboard_guide.md`
+  - [ ] `README.md` / 보고서를 새 목표로 갱신(E2+HIL 전면), 발표 슬라이드 outline
 - **산출물**: 비교 차트 PNG, GUI 데모, 발표 outline, 갱신된 README
 
 ---

@@ -99,7 +99,7 @@ def infer(layers, x):
 Run: `python tests/test_inference_parity.py`
 Expected: `[PASS] numpy == torch — action + logits (100/100)`
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add edge_server.py tests/test_inference_parity.py
@@ -219,7 +219,7 @@ class Dashboard:
 Run: `python tests/test_dashboard.py`
 Expected: `[PASS] dashboard /state 왕복 OK`
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add dashboard.py tests/test_dashboard.py
@@ -368,7 +368,7 @@ setInterval(poll, 200); poll();
 Run: `python -c "import time; from dashboard import Dashboard; d=Dashboard(); print(d.start(port=8766)); d.update({'step':1,'phase':0,'phase_name':'남북직진','time_in_phase':10,'decision':'keep','q':[2.1,0.4],'metrics':{'waiting_vehicles':42,'avg_wait':11.3,'throughput':318},'lanes':[{'label':'북 우회전','group':'우회전','count':2,'cap':20,'is_green':True},{'label':'북 직진','group':'직진','count':17,'cap':20,'is_green':True},{'label':'북 좌회전','group':'좌회전','count':5,'cap':20,'is_green':False}]*4,'edge':'local'}); time.sleep(30)"`
 Expected: `http://127.0.0.1:8766` 출력. 브라우저로 열면 상단지표·12막대·KEEP·Q막대가 보임. (확인 후 Ctrl+C)
 
-- [ ] **Step 3: 커밋**
+- [x] **Step 3: 커밋**
 
 ```bash
 git add dashboard.html
@@ -522,7 +522,7 @@ if dash:
 Run: `python -c "import py_compile; py_compile.compile('demo.py', doraise=True); print('OK')"`
 Expected: `OK`
 
-- [ ] **Step 9: 커밋**
+- [x] **Step 9: 커밋**
 
 ```bash
 git add demo.py
@@ -544,18 +544,18 @@ git commit -m "feat(hil): demo --dashboard (실시간 웹 대시보드 연동)"
 .superpowers/
 ```
 
-- [ ] **Step 2: 로컬 통합 검증 (대시보드 + 로컬 RL)** — 사람이 직접 수행
+- [x] **Step 2: 로컬 통합 검증 (대시보드 + 로컬 RL)** — 사람이 직접 수행
 
 Run: `python demo.py --dashboard --mode rl --scenario asymmetric --duration 600`
 Expected: SUMO GUI + 브라우저 자동 오픈. ▶ 재생 시 12차로 막대·상단지표·KEEP/SWITCH·Q값 막대가 차량 흐름에 맞춰 실시간 갱신. (god-view 29D 모델이 구동, 대시보드는 E2 원시값 표시.)
 
-- [ ] **Step 3: HIL 통합 검증 (대시보드 + 엣지서버)** — 사람이 직접 수행
+- [x] **Step 3: HIL 통합 검증 (대시보드 + 엣지서버)** — 사람이 직접 수행
 
 터미널 A: `python edge_server.py --weights results/smart_signal_e2.npz`
 터미널 B: `python demo.py --hil --dashboard --scenario asymmetric --duration 600`
 Expected: `[hil] 엣지서버 연결` + `[dashboard] http://127.0.0.1:8000`. 브라우저에서 Pi/엣지가 낸 Q값 막대가 실시간 표시, 하단 범례가 `엣지: Pi 127.0.0.1:9999 …` 로 표기. (실물 Pi면 `--host <PI_IP>`.)
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add .gitignore
