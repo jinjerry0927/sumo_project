@@ -49,7 +49,7 @@ ItsApiStreamSource → VehicleDetector(YOLOv8s) → LaneAggregator(ROI) → 화�
 ## 사용법
 
 ```powershell
-cd C:\Users\James\Documents\GitHub\sumo_project
+cd C:\Users\James\Documents\GitHub\smart_signal_traffic
 $env:ITS_API_KEY = "발급받은_키"
 .\scripts\demo_mohwa.ps1
 # 영상에서 's'키로 스크린샷 → ROI 좌표 보정 → 다시 실행

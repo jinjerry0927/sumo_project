@@ -65,7 +65,7 @@
 ### 1. 창 B (노트북) — 폴더 진입 + Pi에 최신 서버 복사
 PowerShell 새 창:
 ```powershell
-cd C:\Users\jinuk\Documents\GitHub\sumo_project
+cd C:\Users\jinuk\Documents\GitHub\smart_signal_traffic
 git pull
 scp edge_server.py jinjerry@<IP>:~/
 ```

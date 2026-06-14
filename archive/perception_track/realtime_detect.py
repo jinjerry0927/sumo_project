@@ -5,7 +5,7 @@
 import cv2
 from ultralytics import YOLO
 
-VIDEO_PATH  = r"C:\Users\James\Documents\GitHub\sumo_project\intersection.mp4"
+VIDEO_PATH  = r"C:\Users\James\Documents\GitHub\smart_signal_traffic\intersection.mp4"
 MODEL_PATH  = "yolov8n.pt"
 CONF        = 0.15
 VEHICLE_CLS = [2, 5, 7]     # car, bus, truck

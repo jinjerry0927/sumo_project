@@ -50,7 +50,7 @@
 ## 📂 폴더 구조
 
 ```
-sumo_project/
+smart_signal_traffic/
 ├── README.md
 ├── requirements.txt
 ├── .gitignore
